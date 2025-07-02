@@ -12,6 +12,7 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const groupRoutes = require('./routes/group'); 
+const postRoutes = require('./routes/post'); 
 
 // load environment variables
 dotenv.config();
@@ -46,6 +47,7 @@ connectDB();
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/posts', postRoutes);
 
 // define a simple route for testing
 app.get('/',(req, res)=>{
