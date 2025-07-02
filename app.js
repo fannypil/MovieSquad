@@ -8,10 +8,10 @@ const { Server } = require('socket.io');
 // Import db connection function
 const connectDB = require('./config/db'); 
 
-// Import Auth Routes
+// Import Routes
 const authRoutes = require('./routes/auth');
-// Import User Routes
 const userRoutes = require('./routes/user');
+const groupRoutes = require('./routes/group'); 
 
 // load environment variables
 dotenv.config();
@@ -45,6 +45,7 @@ connectDB();
 // Define Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/groups', groupRoutes);
 
 // define a simple route for testing
 app.get('/',(req, res)=>{
