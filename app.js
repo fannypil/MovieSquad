@@ -13,6 +13,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const groupRoutes = require('./routes/group'); 
 const postRoutes = require('./routes/post'); 
+const tmdbRoutes = require('./routes/tmdb');
 
 // load environment variables
 dotenv.config();
@@ -48,6 +49,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/tmdb', tmdbRoutes);
 
 // define a simple route for testing
 app.get('/',(req, res)=>{
@@ -70,3 +72,4 @@ io.on('connection', (socket)=>{
 // start the server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, ()=> console.log(`Server is running on port ${PORT}`));
+
