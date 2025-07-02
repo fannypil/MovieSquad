@@ -1,6 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -14,6 +13,8 @@ const userRoutes = require('./routes/user');
 const groupRoutes = require('./routes/group'); 
 const postRoutes = require('./routes/post'); 
 const tmdbRoutes = require('./routes/tmdb');
+
+const socketHandler = require('./sockets/socketHandler');
 
 // load environment variables
 dotenv.config();
@@ -30,14 +31,13 @@ const server= http.createServer(app);
 const io = new Server(server, {
     cors: {
         origin: process.env.CLIENT_URL || "http://localhost:3000", // Adjust this to your frontend URL
-        methods: ["GET", "POST"]
+       methods: ["GET", "POST", "PUT", "DELETE"]
     }
 });
 
 // Middleware
 app.use(express.json());
 app.use(cors());
-app.use(bodyParser.json());
 // gemini , effie didnt show:
 // app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
 
@@ -56,18 +56,7 @@ app.get('/',(req, res)=>{
     res.send('Welcome to the Movie Squad Backend!');
 });
 
-// Socket.io connection -> Gemiini לא כמו שאפי עשה
-io.on('connection', (socket)=>{
-    console.log('User connected:', socket.id);
-
-    socket.on('disconnect', ()=>{
-        console.log('User disconnected:', socket.id);
-    });
-    socket.on('chat message', (msg) =>{
-        console.log('Message received:', msg);
-        io.emit('chat message', msg);
-    })
-});
+socketHandler(io)
 
 // start the server
 const PORT = process.env.PORT || 5000;
