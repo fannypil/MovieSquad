@@ -88,4 +88,73 @@ exports.getGroupById = async (req, res) => {
         res.status(500).send('Server Error');
     }
 }
-// add update and delete group functions here later
+
+// @desc    Update a group
+// @route   PUT /api/groups/:id
+// @access  Private (only group admin or global admin)
+exports.updateGroup = async (req, res) => {
+    const { name, description, isPrivate } = req.body;
+    const groupId = req.params.id;
+    try{
+        let group= await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({ msg: 'Group not found' });
+        }
+        // Check if the user is the admin of the group
+        if (group.admin.toString() !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ msg: 'Forbidden: You are not authorized to update this group' });
+        }
+        if(name && name !== group.name){
+            const existingGroup = await Group.findOne({ name });
+            if (existingGroup && existingGroup._id.toString() !== groupId) {
+                return res.status(400).json({ msg: 'Another group with this name already exists' });
+            }
+        }
+        // Update group details
+        if(name) group.name = name;
+        if(description) group.description = description;
+        if(typeof isPrivate === 'boolean') group.isPrivate = isPrivate;
+        await group.save();
+        res.json(group);
+    }catch(err){
+        console.error(err.message);
+        if(err.kind === 'ObjectId') {
+            return res.status(400).json({ message: 'Invalid group ID format' });
+        }
+        if(err.code === 11000) {
+            return res.status(400).json({ message: 'A group with this name already exists.' });
+        }
+        res.status(500).send('Server Error');
+    }
+}
+
+// @desc    Delete a group
+// @route   DELETE /api/groups/:id
+// @access  Private (only group admin or global admin)
+exports.deleteGroup = async (req, res) => {
+    const groupId = req.params.id;
+    try{
+        let group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({ msg: 'Group not found' });
+        }
+        // Check if the user is the admin of the group
+        if (group.admin.toString() !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ msg: 'Forbidden: You are not authorized to delete this group' });
+        }
+        // Remove the group from the user's groups list
+        await Group.deleteOne({ _id: groupId });
+        //remove this group from all users
+        await User.updateMany(
+            { groups: groupId },
+            { $pull: { groups: groupId } }
+        );
+        res.json({ msg: 'Group deleted successfully' });
+    }catch(err){
+        console.error(err.message);
+        if(err.kind === 'ObjectId') {
+            return res.status(400).json({ message: 'Invalid group ID format' });
+        }
+        res.status(500).send('Server Error');
+    }
+}
