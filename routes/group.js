@@ -35,5 +35,8 @@ router.delete('/:id/watchlist/:tmdbId/:tmdbType', auth, authorizeRoles('user', '
 // Get a group's shared watchlist,GET /api/groups/:id/watchlist
 router.get('/:id/watchlist', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.getSharedWatchlist);
 
+// Group member management routes
+router.put('/:id/join', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.joinGroup);
+router.post('/:id/invite', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.inviteToGroup);
 
 module.exports = router;
