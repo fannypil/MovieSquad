@@ -1,5 +1,5 @@
 const {validationResult} = require('express-validator');
-const bycrypt = require('bcryptjs'); // password hashing library
+const bcrypt = require('bcryptjs'); // password hashing library
 const jwt = require('jsonwebtoken'); // JWT library for token generation
 const User = require('../models/User');
 
@@ -31,8 +31,8 @@ exports.registerUser= async(req, res)=>{
             password
         });
         // Hash the password
-        const salt = await bycrypt.genSalt(10);
-        user.password = await bycrypt.hash(password, salt); // Hash the password before saving it
+        // const salt = await bcrypt.genSalt(10);
+        // user.password = await bcrypt.hash(password, salt); // Hash the password before saving it
 
         // Save the user to the database
         await user.save();
@@ -49,7 +49,19 @@ exports.registerUser= async(req, res)=>{
             {expiresIn: '1h'}, // Token expires in 1 hour
             (err, token)=>{
                 if(err) throw err; 
-                res.status(201).json({msg: 'User registered successfully', token}); 
+                res.status(201).json({
+                    success: true,
+                    msg: 'User registered successfully', 
+                    token: token,
+                    user: { // ADD THIS USER OBJECT
+                        _id: user._id,
+                        username: user.username,
+                        email: user.email,
+                        role: user.role,
+                        profilePicture: user.profilePicture,
+                        bio: user.bio
+                    }
+                }); 
             }
         )
     }catch(error){
@@ -70,13 +82,13 @@ exports.loginUser= async(req, res)=>{
     }
     const {email, password} = req.body;
     try{
-        // Check if user exists
-        let user = await User.findOne({email})
+        // Check if user exists - INCLUDE password for comparison
+        let user = await User.findOne({email}).select('+password');
         if(!user){
             return res.status(400).json({ errors: [{ msg: 'Invalid credentials' }] });
         }
-        // Check if password matches
-        const isMatch = await bycrypt.compare(password, user.password);
+        // Use the model's built-in password matching method
+        const isMatch = await user.matchPassword(password);
         if(!isMatch){
             return res.status(400).json({ errors: [{ msg: 'Invalid credentials' }] });
         }
@@ -93,7 +105,20 @@ exports.loginUser= async(req, res)=>{
             {expiresIn: '1h'}, 
             (err, token)=>{
                 if(err) throw err; 
-                res.status(200).json({msg: 'User logged in successfully', token}); 
+                res.status(200).json({
+                     success: true,
+                    msg: 'User logged in successfully', 
+                    token: token,
+                    user: { // ADD THIS USER OBJECT
+                        _id: user._id,
+                        username: user.username,
+                        email: user.email,
+                        role: user.role,
+                        profilePicture: user.profilePicture,
+                        bio: user.bio
+                        // DO NOT include password here!
+                    }
+                }); 
             }
         )
     }catch(err){
