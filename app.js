@@ -14,8 +14,11 @@ const groupRoutes = require('./routes/group');
 const postRoutes = require('./routes/post'); 
 const tmdbRoutes = require('./routes/tmdb');
 const adminRoutes = require('./routes/admin');
+const conversationRoutes = require('./routes/conversation')
+const notificationRoutes = require('./routes/notification');
 
 const socketHandler = require('./sockets/socketHandler');
+const notificationService = require('./utils/notificationService');
 
 // load environment variables
 dotenv.config();
@@ -27,6 +30,7 @@ const server= http.createServer(app);
 // const io= new Server (server,{
 //     cors:{origin:"*"}
 // })
+const { setIoInstance } = require('./utils/notificationService');
 
 // Gemini:
 const io = new Server(server, {
@@ -35,6 +39,8 @@ const io = new Server(server, {
        methods: ["GET", "POST", "PUT", "DELETE"]
     }
 });
+setIoInstance(io);
+
 
 // Middleware
 app.use(express.json());
@@ -52,6 +58,8 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/tmdb', tmdbRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/conversations', conversationRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // define a simple route for testing
 app.get('/',(req, res)=>{
@@ -59,6 +67,7 @@ app.get('/',(req, res)=>{
 });
 
 socketHandler(io)
+notificationService.setIoInstance(io)
 
 // start the server
 const PORT = process.env.PORT || 5000;
