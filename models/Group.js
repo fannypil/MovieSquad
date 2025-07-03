@@ -35,6 +35,37 @@ const groupSchema = new mongoose.Schema({
             ref: 'User'  
         }
     ],
+    sharedWatchlist: [
+        {
+            tmdbId: {
+                type: Number,
+                required: true
+            },
+            tmdbType: { // 'movie' or 'tv'
+                type: String,
+                required: true,
+                enum: ['movie', 'tv']
+            },
+            tmdbTitle: {
+                type: String,
+                required: true,
+                trim: true
+            },
+            tmdbPosterPath: {
+                type: String,
+                default: null
+            },
+            addedBy: { // User who added this item to the shared watchlist
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User',
+                required: true
+            },
+            addedAt: { // Timestamp of when it was added
+                type: Date,
+                default: Date.now
+            }
+        }
+    ],
       // Posts belonging to this group (though posts will also have a 'group' reference for easier querying)
     // This is optional for direct reference, often populated from Post model queries
     // posts: [

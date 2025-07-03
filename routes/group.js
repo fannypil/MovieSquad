@@ -26,4 +26,14 @@ router.put('/:id', auth, authorizeRoles('groupAdmin', 'admin'), groupController.
 // DELETE /api/groups/:id , Delete a group (only groupAdmin or admin can delete)
 router.delete('/:id', auth, authorizeRoles('groupAdmin', 'admin'), groupController.deleteGroup);
 
+//  Add a movie/TV show to a group's shared watchlist, POST /api/groups/:id/watchlist
+router.post('/:id/watchlist', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.addToSharedWatchlist);
+
+// Remove a movie/TV show from a group's shared watchlist,  DELETE /api/groups/:id/watchlist/:tmdbId/:tmdbType
+router.delete('/:id/watchlist/:tmdbId/:tmdbType', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.removeFromSharedWatchlist);
+
+// Get a group's shared watchlist,GET /api/groups/:id/watchlist
+router.get('/:id/watchlist', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.getSharedWatchlist);
+
+
 module.exports = router;
