@@ -1,6 +1,7 @@
 
 const Group= require('../models/Group');
 const User = require('../models/User');
+const { createNotification } = require('../utils/notificationService'); // Add this import
 
 // Helper function for consistent error handling
 const handleServerError = (res, err, message = 'Server error') => {
@@ -193,6 +194,17 @@ exports.addToSharedWatchlist = async (req, res) => {
 
         group.sharedWatchlist.unshift(newItem); // Add to the beginning (most recent first)
         await group.save();
+            // CREATE NOTIFICATIONS: Notify all group members except the one who added it
+        const membersToNotify = group.members.filter(memberId => memberId.toString() !== userId);
+        
+        for (const memberId of membersToNotify) {
+            await createNotification(memberId, 'group_watchlist_add', {
+                senderId: userId,
+                entityId: groupId,
+                entityType: 'Group',
+                message: `${req.user.username || 'Someone'} added "${tmdbTitle}" to ${group.name}'s watchlist.`
+            });
+        }
 
         // Populate the addedBy field for the newly added item before sending response
         const updatedGroup = await Group.findById(groupId)
@@ -272,5 +284,95 @@ exports.getSharedWatchlist = async (req, res) => {
         res.json(group.sharedWatchlist);
     } catch (err) {
         handleServerError(res, err, 'Server Error fetching shared watchlist');
+    }
+};
+// Join a group, PUT /api/groups/:id/join
+exports.joinGroup = async (req, res) => {
+    const groupId = req.params.id;
+    const userId = req.user.id;
+
+    try {
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+
+        // Check if user is already a member
+        if (group.members.includes(userId)) {
+            return res.status(400).json({ message: 'You are already a member of this group.' });
+        }
+
+        // For private groups, you might want to implement an invitation system
+        if (group.isPrivate) {
+            return res.status(403).json({ message: 'This is a private group. You need an invitation to join.' });
+        }
+
+        // Add user to group members
+        group.members.push(userId);
+        await group.save();
+
+        // Add group to user's groups
+        const user = await User.findById(userId);
+        if (user && !user.groups.includes(groupId)) {
+            user.groups.push(groupId);
+            await user.save();
+        }
+
+        // CREATE NOTIFICATION: Notify group admin that someone joined
+        if (group.admin.toString() !== userId) {
+            await createNotification(group.admin, 'group_joined', {
+                senderId: userId,
+                entityId: groupId,
+                entityType: 'Group'
+            });
+        }
+
+        res.json({ message: 'Successfully joined the group', group });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error joining group');
+    }
+};
+
+// Invite user to group, POST /api/groups/:id/invite
+exports.inviteToGroup = async (req, res) => {
+    const groupId = req.params.id;
+    const { inviteeId } = req.body; // User to invite
+    const inviterId = req.user.id;
+
+    if (!inviteeId) {
+        return res.status(400).json({ message: 'Invitee ID is required' });
+    }
+
+    try {
+        const group = await Group.findById(groupId);
+        const invitee = await User.findById(inviteeId);
+
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+        if (!invitee) {
+            return res.status(404).json({ message: 'User to invite not found.' });
+        }
+
+        // Check if inviter has permission (admin or member for non-private groups)
+        if (group.admin.toString() !== inviterId && !group.members.includes(inviterId) && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden: You must be a member or admin to invite others.' });
+        }
+
+        // Check if user is already a member
+        if (group.members.includes(inviteeId)) {
+            return res.status(400).json({ message: 'User is already a member of this group.' });
+        }
+
+        // CREATE NOTIFICATION: Notify the invitee
+        await createNotification(inviteeId, 'group_invite', {
+            senderId: inviterId,
+            entityId: groupId,
+            entityType: 'Group'
+        });
+
+        res.json({ message: 'Group invitation sent successfully' });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error sending group invitation');
     }
 };
