@@ -11,6 +11,17 @@ if(!TMDB_API_KEY) {
     console.error('Error: TMDB_API_KEY is not defined in .env');
 }
 
+// Helper function for common error handling
+const handleTmdbError = (res, err, message) => {
+    console.error(`${message}:`, err.message);
+    if (err.response && err.response.data) {
+        // Pass TMDB's specific error message and status if available
+        return res.status(err.response.status).json(err.response.data);
+    }
+    res.status(500).json({ error: `Server Error while ${message.toLowerCase()}` });
+};
+
+
 // Search for movies and TV shows
 exports.searchTmdb = async (req, res) => {
     //Default type to movie, page to 1
@@ -31,11 +42,7 @@ exports.searchTmdb = async (req, res) => {
         });
         res.json(response.data);
         } catch (error) {
-            console.error('TMDB Search Error:', err.message);
-            if(err.response && err.response.data){
-                return res.status(err.response.status).json(err.response.data);
-            }
-            res.status(500).json({ error: 'Server Error while searching TMDB' });
+            handleTmdbError(res, err, 'searching TMDB');
         }
 }
 
@@ -58,11 +65,7 @@ exports.getTmdbDetails = async (req, res) =>{
         });
         res.json(response.data);
     }catch (err) {
-        console.error('TMDB Details Error:', err.message);
-        if(err.response && err.response.data){
-            return res.status(err.response.status).json(err.response.data);
-        }
-        res.status(500).json({ error: 'Server Error while fetching TMDB details' });
+       handleTmdbError(res, err, 'fetching TMDB details');
     }
 }
 
@@ -84,11 +87,57 @@ exports.getTmdbTrending = async (req, res) =>{
         });
         res.json(response.data);
     }catch(err){
-        console.error('TMDB Trending Error:', err.message);
-        if(err.response && err.response.data){
-            return res.status(err.response.status).json(err.response.data);
-        }
-        res.status(500).json({ error: 'Server Error while fetching TMDB trending' });
+       handleTmdbError(res, err, 'fetching TMDB trending');
     }
 
+}
+
+// Discover movies or TV shows with advanced filtering , GET /api/tmdb/discover
+exports.discoverTmdb = async (req, res)=>{
+    const{
+        type= 'movie', //'movie' or 'tv'
+        page=1,
+        sort_by='popularity.desc', // e.g., 'popularity.desc', 'vote_average.desc', 'release_date.desc'
+        with_genres,
+        primary_release_year, //movies
+        first_air_date_year, // tv
+        vote_average_gte,
+        vote_count_gte,
+        query 
+    }=req.query
+
+    if(!['movie', 'tv'].includes(type)) {
+        return res.status(400).json({ error: 'Invalid type. Must be "movie" or "tv".' });
+    }
+
+    let tmdbPath= `/discover/${type}`;
+    const params={
+        api_key: TMDB_API_KEY,
+        page: page,
+        sort_by: sort_by
+    }
+
+    if (with_genres) {
+        params.with_genres = with_genres;
+    }
+    if (type === 'movie' && primary_release_year) {
+        params.primary_release_year = primary_release_year;
+    }
+    if (type === 'tv' && first_air_date_year) {
+        params.first_air_date_year = first_air_date_year;
+    }
+    if (vote_average_gte) {
+        params['vote_average.gte'] = vote_average_gte; // Note the dot notation for TMDB
+    }
+    if (vote_count_gte) {
+        params['vote_count.gte'] = vote_count_gte;
+    }
+    // More discover params can be added here..
+
+    try{
+        const response = await axios.get(`${TMDB_BASE_URL}${tmdbPath}`, { params });
+        res.json(response.data)
+    }catch(err){
+        handleTmdbError(res, err, `discovering ${type} content`);
+    }
 }
