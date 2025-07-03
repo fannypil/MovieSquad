@@ -1,22 +1,16 @@
-// test_client.js
 
 const io = require('socket.io-client');
 const axios = require('axios'); // To get a JWT token first
 
 const backendUrl = 'http://localhost:3001'; // Your backend URL
 
-// --- IMPORTANT: CONFIGURE THESE FOR USER A ---
-const userA_Credentials = {
-    email: 'test@example.com', // e.g., 'userA@example.com'
+// --- IMPORTANT: CONFIGURE THESE FOR USER B ---
+const userA_Credentials = { // These are now User B's credentials
+    email: 'testjest@example.com', // e.g., 'userB@example.com'
     password: 'password123' // e.g., 'password123'
 };
-const userB_Id = '6865347dcf3caf52f1cc024e'; // <--- IMPORTANT: Get User B's actual MongoDB _id
+const userB_Id = '6863f27bfb66a11a4746f569'; // <--- IMPORTANT: Get User A's actual MongoDB _id
 // ---------------------------------------------
-
-
-// --- IMPORTANT: CONFIGURE THIS FOR GROUP CHAT (if still testing groups) ---
-const groupIdToJoin = 'PASTE_YOUR_GROUP_ID_HERE'; // <--- IMPORTANT: Replace with a real Group ID if you want to test group chat
-// --------------------------------------------------------------------------
 
 let socket;
 
@@ -163,14 +157,17 @@ async function startClient(clientName, userCredentials, otherUserIdForPrivateCha
     }
 }
 
-// --- Start Client A ---
-console.log('Starting Client A...');
-startClient('Client A', userA_Credentials, userB_Id, groupIdToJoin);
+// --- Start Client B ---
+console.log('Starting Client B...');
+// Note: The arguments are (clientName, userCredentials, otherUserIdForPrivateChat, groupIdForGroupChat)
+// For Client B, 'otherUserIdForPrivateChat' is User A's ID
+// You can pass null for groupIdForGroupChat if you only want to test private chat
+startClient('Client B', userA_Credentials, userB_Id, null); // Pass null if Client B isn't joining the group
 
 // Disconnect client after a set duration
 setTimeout(() => {
     if (socket) {
-        console.log('Disconnecting Client A after 20 seconds...');
+        console.log('Disconnecting Client B after 20 seconds...');
         socket.disconnect();
     }
-}, 20000); // Keep client A running for 20 seconds
+}, 20000); // Keep client B running for 20 seconds
