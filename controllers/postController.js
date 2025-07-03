@@ -2,12 +2,22 @@ const Post= require('../models/Post');
 const User= require('../models/User');
 const Group= require('../models/Group');
 
+// Helper function for consistent error handling
+const handleServerError = (res, err, message = 'Server error') => {
+    console.error(err.message);
+    if (err.kind === 'ObjectId') {
+        return res.status(400).json({ message: 'Invalid ID format' });
+    }
+    if (err.response && err.response.data) { // For errors from external APIs like TMDB (though not directly used here)
+        return res.status(err.response.status).json(err.response.data);
+    }
+    res.status(500).json({ message: message });
+};
+
 // @desc    Create a new post
 // @route   POST /api/posts
 // @access  Private (authenticated users)
 exports.createPost = async (req, res) => {
-    console.log('Request body:', req.body); // Debug line
-    console.log('User from req:', req.user); // Debug line
     
     const { content, groupId, tmdbId, tmdbType, tmdbTitle, tmdbPosterPath, categories } = req.body;
 
@@ -66,8 +76,7 @@ exports.createPost = async (req, res) => {
         // }
         res.status(201).json(newPost);
     }catch(err){
-        console.error(err.message);
-        res.status(500).json({ message: 'Server error' });
+        handleServerError(res, err, 'Server error creating post');
     }
 }
 // @desc    Get all posts (optionally by group or user)
@@ -92,8 +101,7 @@ exports.getPosts = async (req, res) => {
             .sort({ createdAt: -1 }); // Sort by newest first
         res.json(posts);
     }catch(err){
-        console.error(err.message);
-        res.status(500).json({ message: 'Server error' });
+        handleServerError(res, err, 'Server error fetching posts');
     }
 }
 
@@ -104,17 +112,15 @@ exports.getPostById = async (req, res) => {
     try{
         const post = await Post.findById(req.params.id)
             .populate('author', 'username email')
-            .populate('group', 'name'); 
+            .populate('group', 'name')
+            .populate('likes', 'username email')
+            .populate('comments.user', 'username email');
             if (!post) {
                 return res.status(404).json({ message: 'Post not found' });
             }
         res.json(post);
     } catch(err){
-        console.error(err.message);
-        if (err.kind === 'ObjectId') {
-            return res.status(400).json({ message: 'Invalid post ID format' });
-        }
-        res.status(500).json({ message: 'Server error' });
+        handleServerError(res, err, 'Server error fetching post by ID');
     }
 }
 // @desc    Update a post
@@ -159,11 +165,7 @@ exports.updatePost = async (req, res) => {
         await post.save();
         res.json(post);
     }catch(err){
-        console.error(err.message);
-        if (err.kind === 'ObjectId') {
-            return res.status(400).json({ message: 'Invalid post ID format' });
-        }
-        res.status(500).json({ message: 'Server error' });
+        handleServerError(res, err, 'Server error updating post');
     }
 }
 
@@ -185,7 +187,7 @@ exports.deletePost = async (req, res) => {
             isAuthorized = true; // Global admin
         }else if(post.group && req.user.role === 'groupAdmin') {
             const group = await Group.findById(post.group);
-            if (group && group.admins.toString() === req.user.id) {
+            if (group && group.admin.toString() === req.user.id) {
                 isAuthorized = true; // User is a group admin of the post's group
             }
         }
@@ -211,10 +213,125 @@ exports.deletePost = async (req, res) => {
         // }
         res.json({ msg: 'Post removed successfully' });
     }catch(err){
-        console.error(err.message);
-        if (err.kind === 'ObjectId') {
-            return res.status(400).json({ message: 'Invalid post ID format' });
-        }
-        res.status(500).json({ message: 'Server error' });
+        handleServerError(res, err, 'Server error deleting post');
     }
 }
+
+// -- FUNCTIONS FOR LIKES AND COMMENTS --
+// Like or Unlike a post ,  PUT /api/posts/:id/like
+exports.likePost = async (req, res) => {
+    const postId = req.params.id;
+    const userId = req.user.id; // User ID from auth middleware
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: 'Post not found' });
+        }
+        // Check if the post has already been liked by this user
+        const hasLiked = post.likes.includes(userId);
+
+        if (hasLiked) {
+            // If already liked, unlike it (pull user ID from likes array)
+            post.likes.pull(userId);
+            await post.save();
+            return res.json({ msg: 'Post unliked successfully', likes: post.likes.length });
+        } else {
+            // If not liked, like it (push user ID to likes array)
+            post.likes.push(userId);
+            await post.save();
+            return res.json({ msg: 'Post liked successfully', likes: post.likes.length });
+        }
+    } catch (err) {
+        handleServerError(res, err, 'Server error liking/unliking post');
+    }
+};
+
+//Add a comment to a post ,  POST /api/posts/:id/comments
+exports.addComment = async (req, res) => {
+    const postId = req.params.id;
+    const { text } = req.body; // Comment content
+
+    if (!text || text.trim() === '') {
+        return res.status(400).json({ message: 'Comment text is required.' });
+    }
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: 'Post not found.' });
+        }
+        const newComment = {
+            user: req.user.id, // The authenticated user is the comment author
+            text: text.trim(),
+            createdAt: Date.now() // Set creation timestamp
+        };
+        post.comments.unshift(newComment); // Add new comment to the beginning of the array (most recent first)
+        await post.save();
+
+        // Populate the user field for the newly added comment before sending response
+        const populatedPost = await Post.findById(postId)
+            .populate('comments.user', 'username email'); // Only populate comments.user
+        // Find the newly added comment in the populated post to return it
+        const latestComment = populatedPost.comments[0];
+
+        res.status(201).json(latestComment); // Return the newly added comment
+    } catch (err) {
+        handleServerError(res, err, 'Server error adding comment');
+    }
+};
+
+// Delete a comment from a post, DELETE /api/posts/:postId/comments/:commentId
+exports.deleteComment = async (req, res) => {
+    const { postId, commentId } = req.params;
+    const userId = req.user.id; // Authenticated user attempting to delete
+
+    try {
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: 'Post not found.' });
+        }
+
+        // Find the specific comment
+        const comment = post.comments.find(
+            (comm) => comm._id.toString() === commentId
+        );
+
+        if (!comment) {
+            return res.status(404).json({ message: 'Comment not found.' });
+        }
+        // --- Authorization Check for deleting a comment ---
+        let isAuthorized = false;
+        // 1. Comment author
+        if (comment.user.toString() === userId) {
+            isAuthorized = true;
+        }
+        // 2. Post author
+        else if (post.author.toString() === userId) {
+            isAuthorized = true;
+        }
+        // 3. Global admin
+        else if (req.user.role === 'admin') {
+            isAuthorized = true;
+        }
+        // 4. Group Admin of THIS post's group (if post has a group)
+        else if (post.group && req.user.role === 'groupAdmin') {
+            const group = await Group.findById(post.group);
+            // IMPORTANT: Your Group schema has 'admin', not 'admins'. Corrected below.
+            if (group && group.admin.toString() === userId) {
+                isAuthorized = true;
+            }
+        }
+        if (!isAuthorized) {
+            return res.status(403).json({ message: 'Forbidden: You are not authorized to delete this comment.' });
+        }
+        // Remove the comment
+        post.comments = post.comments.filter(
+            ({ _id }) => _id.toString() !== commentId
+        );
+        await post.save();
+        res.json({ msg: 'Comment removed successfully', comments: post.comments });
+    } catch (err) {
+        handleServerError(res, err, 'Server error deleting comment');
+    }
+};

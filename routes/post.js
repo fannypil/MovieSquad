@@ -19,4 +19,14 @@ router.put('/:id', auth, authorizeRoles('user', 'groupAdmin', 'admin'), postCont
 // Delete post by id DELETE /api/posts/:id
 router.delete('/:id', auth, authorizeRoles('user', 'groupAdmin', 'admin'), postController.deletePost);
 
+// Like or Unlike a post,PUT /api/posts/:id/like
+router.put('/:id/like', auth, authorizeRoles('user', 'groupAdmin', 'admin'), postController.likePost);
+
+//Add a comment to a post, POST /api/posts/:id/comments
+router.post('/:id/comments', auth, authorizeRoles('user', 'groupAdmin', 'admin'), postController.addComment);
+
+// Delete a comment from a post,  DELETE /api/posts/:postId/comments/:commentId
+router.delete('/:postId/comments/:commentId', auth, authorizeRoles('user', 'groupAdmin', 'admin'), postController.deleteComment);
+
+
 module.exports = router;
