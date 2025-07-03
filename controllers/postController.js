@@ -1,6 +1,7 @@
 const Post= require('../models/Post');
 const User= require('../models/User');
 const Group= require('../models/Group');
+const { createNotification } = require('../utils/notificationService');
 
 // Helper function for consistent error handling
 const handleServerError = (res, err, message = 'Server error') => {
@@ -240,6 +241,14 @@ exports.likePost = async (req, res) => {
             // If not liked, like it (push user ID to likes array)
             post.likes.push(userId);
             await post.save();
+            // CREATE NOTIFICATION: Notify post author if someone else liked their post
+            if (post.author.toString() !== userId) {
+                await createNotification (post.author, 'like', {
+                    senderId: userId,
+                    entityId: postId,
+                    entityType: 'Post'
+                });
+            }
             return res.json({ msg: 'Post liked successfully', likes: post.likes.length });
         }
     } catch (err) {
@@ -268,6 +277,14 @@ exports.addComment = async (req, res) => {
         };
         post.comments.unshift(newComment); // Add new comment to the beginning of the array (most recent first)
         await post.save();
+        // CREATE NOTIFICATION: Notify post author if someone else commented on their post
+        if (post.author.toString() !== req.user.id) {
+            await createNotification(post.author, 'comment', {
+                senderId: req.user.id,
+                entityId: postId,
+                entityType: 'Post'
+            });
+        }
 
         // Populate the user field for the newly added comment before sending response
         const populatedPost = await Post.findById(postId)
