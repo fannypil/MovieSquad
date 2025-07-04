@@ -12,7 +12,22 @@
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
-    "jest": "^30.0.3",
+    "cross-env": "^7.0.3",
+    "jest": "^30.0.4",
     "supertest": "^7.1.1"
+  },
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "cross-env NODE_ENV=test jest",
+    "test:watch": "cross-env NODE_ENV=test jest --watch",
+    "test:coverage": "cross-env NODE_ENV=test jest --coverage"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/setup.js"
+    ],
+    "testTimeout": 30000
   }
 }

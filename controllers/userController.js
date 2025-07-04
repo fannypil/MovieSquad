@@ -1,4 +1,3 @@
-const { getEventListeners } = require('supertest/lib/test');
 const User = require('../models/User')
 const jwt= require('jsonwebtoken');
 const { createNotification } = require('../utils/notificationService'); // Add this import
@@ -93,12 +92,13 @@ exports.addWatchedContent = async (req, res) => {
 
         // Check if the content is already in the watched list
         const alreadyWatched = user.watchedContent.some(
-            (item)=> item.tmdbId ===tmdbId && item.tmdbType === tmdbType)
+            (item) => item.tmdbId === parseInt(tmdbId) && item.tmdbType === tmdbType
+        );
         if( alreadyWatched ) {
             return res.status(400).json({ message: 'Content already in watched list' });
         }
         user.watchedContent.unshift({
-            tmdbId,
+            tmdbId: parseInt(tmdbId), // Convert to number
             tmdbType,
             watchedDate: watchedDate || Date.now()
         });
