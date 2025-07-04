@@ -13,6 +13,9 @@ router.get('/me', auth, userController.getMe);
 // @access  Private
 router.put('/me', auth, userController.updateMe);
 
+// @route   PUT /api/user/me/settings, update profile settings
+router.put('/me/settings', auth, userController.updateProfileSettings);
+
 // -- ROUTES FOR MANAGING WATCHED CONTENT --
 // @route   PUT /api/user/me/watched
 router.put('/me/watched', auth, userController.addWatchedContent);
@@ -41,10 +44,16 @@ router.put('/me/friends/:friendId', auth, userController.addFriend);
 // @route   DELETE /api/user/me/friends/:friendId
 router.delete('/me/friends/:friendId', auth, userController.removeFriend);
 
+//  GET /api/user/me/friends
+router.get('/me/friends', auth, userController.getMyFriends);
+
+
 // Friend request routes
 router.post('/friends/request', auth, userController.sendFriendRequest);
 router.put('/friends/accept', auth, userController.acceptFriendRequest);
 router.put('/friends/reject', auth, userController.rejectFriendRequest);
+// GET /api/user/me/friend-requests, Get pending friend requests
+router.get('/me/friend-requests', auth, userController.getPendingFriendRequests);
 
 // @route   GET /api/user/friends
 router.get('/search', auth, userController.searchUsers);

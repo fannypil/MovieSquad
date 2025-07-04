@@ -79,6 +79,20 @@ const userSchema= new mongoose.Schema({
             ref: 'User'
         }
     ],
+    profileSettings: {
+        isPublic: { 
+            type: Boolean, 
+            default: true 
+        }, 
+        showWatchedContent: { 
+            type: Boolean, 
+            default: true 
+        }, 
+        showFavorites: { 
+            type: Boolean, 
+            default: true 
+        }  
+},
     resetPasswordToken: String, // For password reset functionality
     resetPasswordExpire: Date
 },{

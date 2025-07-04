@@ -46,6 +46,33 @@ exports.updateMe = async (req, res) => {
     }
 }
 
+// Update profile privacy settings,  PUT /api/user/me/settings
+exports.updateProfileSettings = async (req, res) => {
+    try {
+        const { isPublic, showWatchedContent, showFavorites } = req.body;
+
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Initialize profileSettings if it doesn't exist
+        if (!user.profileSettings) {
+            user.profileSettings = {};
+        }
+
+        if (isPublic !== undefined) user.profileSettings.isPublic = isPublic;
+        if (showWatchedContent !== undefined) user.profileSettings.showWatchedContent = showWatchedContent;
+        if (showFavorites !== undefined) user.profileSettings.showFavorites = showFavorites;
+
+        await user.save();
+        res.json(user.profileSettings);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
 // -- ROUTES FOR MANAGING WATCHED CONTENT -- 
 
 // Add a watched content to the user's profile, /api/user/me/watched
@@ -397,6 +424,34 @@ exports.removeFriend = async (req, res) => {
         res.status(500).send('Server Error');
     }
 };
+
+// Get user's friends list, GET /api/user/me/friends
+exports.getMyFriends = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .populate('friends', 'username profilePicture bio')
+            .select('friends');
+
+        res.json(user.friends);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+// Get pending friend requests,  GET /api/user/me/friend-requests
+exports.getPendingFriendRequests = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .populate('friendRequests', 'username profilePicture bio')
+            .select('friendRequests');
+
+        res.json(user.friendRequests);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
 
 // Search users by username,GET /api/user/search?q=username
 exports.searchUsers = async (req, res) => {
