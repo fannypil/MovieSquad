@@ -66,7 +66,7 @@ exports.addWatchedContent = async (req, res) => {
 
         // Check if the content is already in the watched list
         const alreadyWatched = user.watchedContent.some(
-            (item)=> item.tmbdId ===tmdbId && item.tmdbType === tmdbType)
+            (item)=> item.tmdbId ===tmdbId && item.tmdbType === tmdbType)
         if( alreadyWatched ) {
             return res.status(400).json({ message: 'Content already in watched list' });
         }
@@ -103,6 +103,67 @@ exports.removeWatchedContent = async (req, res) =>{
         res.status(500).send('Server Error');
     }
 }
+// -- ROUTES FOR MANAGING MOVIE GENRES --
+exports.addFavoriteMovie = async (req, res) => {
+    const { tmdbId, title } = req.body;
+    
+    if (!tmdbId || !title) {
+        return res.status(400).json({ message: 'TMDB ID and title are required for a favorite movie.' });
+    }
+    
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        const alreadyFavorited = user.favoriteMovies.some(
+            (item) => item.tmdbId === parseInt(tmdbId)
+        );
+        
+        if (alreadyFavorited) {
+            return res.status(400).json({ message: 'Movie already in favorite list.' });
+        }
+        
+        user.favoriteMovies.unshift({
+            tmdbId: parseInt(tmdbId),
+            title
+        });
+        
+        await user.save();
+        res.json(user.favoriteMovies);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+// Remove a movie from user's favorite movies list
+exports.removeFavoriteMovie = async (req, res) => {
+    const { tmdbId } = req.params;
+    
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        const initialLength = user.favoriteMovies.length;
+        user.favoriteMovies = user.favoriteMovies.filter(
+            (item) => item.tmdbId !== parseInt(tmdbId)
+        );
+        
+        if (user.favoriteMovies.length === initialLength) {
+            return res.status(404).json({ message: 'Movie not found in favorite list.' });
+        }
+        
+        await user.save();
+        res.json(user.favoriteMovies);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
 
 // -- ROUTES FOR MANAGING FAVORITE GENRES --
 // Add a genre to user's favorite genres list /api/user/me/genres
@@ -274,6 +335,119 @@ exports.rejectFriendRequest = async (req, res) => {
         await recipient.save();
 
         res.json({ message: 'Friend request rejected successfully' });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+// Add a user to current user's friends list
+exports.addFriend = async (req, res) => {
+    const { friendId } = req.params;
+    
+    if (req.user.id === friendId) {
+        return res.status(400).json({ message: 'Cannot add yourself as a friend.' });
+    }
+    
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'Current user not found.' });
+        }
+        
+        const friend = await User.findById(friendId);
+        if (!friend) {
+            return res.status(404).json({ message: 'Friend user not found.' });
+        }
+        
+        if (user.friends.includes(friendId)) {
+            return res.status(400).json({ message: 'Already friends with this user.' });
+        }
+        
+        user.friends.push(friendId);
+        await user.save();
+        
+        res.json(user.friends);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+// Remove a user from current user's friends list
+exports.removeFriend = async (req, res) => {
+    const { friendId } = req.params;
+    
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+        
+        const initialLength = user.friends.length;
+        user.friends = user.friends.filter(id => id.toString() !== friendId);
+        
+        if (user.friends.length === initialLength) {
+            return res.status(404).json({ message: 'Friend not found in list.' });
+        }
+        
+        await user.save();
+        res.json(user.friends);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+// Search users by username,GET /api/user/search?q=username
+exports.searchUsers = async (req, res) => {
+    try {
+        const { q } = req.query;
+        const currentUserId = req.user.id;
+
+        if (!q || q.trim().length < 2) {
+            return res.status(400).json({ message: 'Search query must be at least 2 characters long' });
+        }
+
+        const users = await User.find({
+            _id: { $ne: currentUserId }, // Exclude current user
+            username: { $regex: q.trim(), $options: 'i' } // Case-insensitive search
+        })
+        .select('username email profilePicture bio')
+        .limit(20); // Limit results
+
+        res.json(users);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+};
+
+// Get user profile by ID (for viewing other users), GET /api/user/profile/:userId
+exports.getUserProfile = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const currentUserId = req.user.id;
+
+        const user = await User.findById(userId)
+            .select('-password -email') // Don't expose sensitive info
+            .populate('friends', 'username profilePicture');
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Check friendship status
+        const isFriend = user.friends.some(friend => friend._id.toString() === currentUserId);
+        const hasPendingRequest = user.friendRequests && user.friendRequests.includes(currentUserId);
+
+        res.json({
+            ...user.toObject(),
+            friendshipStatus: {
+                isFriend,
+                hasPendingRequest,
+                canSendRequest: !isFriend && !hasPendingRequest
+            }
+        });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
