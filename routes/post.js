@@ -4,13 +4,17 @@ const auth = require('../middleware/authMiddleware');
 const authorizeRoles = require('../middleware/authorizeRoles'); 
 const postController = require('../controllers/postController');
 
+
+// POWERFUL SEARCH - MOVE THIS TO THE TOP
+router.get('/search', postController.searchPosts);     
+
 // Create a new post POST /api/posts
 router.post('/', auth, authorizeRoles('user', 'groupAdmin', 'admin'), postController.createPost);
 
 // Get all posts GET /api/posts
 router.get('/', postController.getPosts);
 
-// Get post by id GET /api/posts/:id
+// Get post by id GET /api/posts/:id - AFTER /search
 router.get('/:id', postController.getPostById);
 
 // Update post by id PUT /api/posts/:id
@@ -27,6 +31,5 @@ router.post('/:id/comments', auth, authorizeRoles('user', 'groupAdmin', 'admin')
 
 // Delete a comment from a post,  DELETE /api/posts/:postId/comments/:commentId
 router.delete('/:postId/comments/:commentId', auth, authorizeRoles('user', 'groupAdmin', 'admin'), postController.deleteComment);
-
 
 module.exports = router;

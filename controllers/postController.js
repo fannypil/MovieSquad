@@ -352,3 +352,127 @@ exports.deleteComment = async (req, res) => {
         handleServerError(res, err, 'Server error deleting comment');
     }
 };
+
+//  Advanced search for posts,GET /api/posts/search
+exports.searchPosts = async (req, res) => {
+    try {
+        const { 
+            q,           // General search query
+            author,      // Author username
+            tmdbId,      // Specific movie/TV ID
+            tmdbType,    // 'movie' or 'tv'
+            category,    // Post category
+            dateFrom,    // Date range start
+            dateTo,      // Date range end
+            groupId,     // Group filter
+            sortBy = 'createdAt',  // Sort field
+            order = 'desc',        // Sort order
+            limit = 20,            // Results limit
+            page = 1              // Pagination
+        } = req.query;
+
+        let query = {};
+        let sort = {};
+
+        // Text search across content, tmdbTitle, categories
+        if (q) {
+            query.$text = { $search: q };
+        }
+
+        // Search by author username
+        if (author) {
+            const authorUser = await User.findOne({ 
+                username: { $regex: author, $options: 'i' } 
+            });
+            if (authorUser) {
+                query.author = authorUser._id;
+            } else {
+               return res.json({
+                    posts: [],
+                    pagination: {
+                        page: parseInt(page),
+                        limit: parseInt(limit),
+                        total: 0,
+                        pages: 0
+                    }
+                });
+            }
+        }
+
+        // Filter by specific movie/TV show
+        if (tmdbId) {
+            query.tmdbId = parseInt(tmdbId);
+        }
+
+        // Filter by movie or TV
+        if (tmdbType) {
+            if (['movie', 'tv'].includes(tmdbType)) {
+                query.tmdbType = tmdbType;
+            } else {
+                // ✅ FIX: Return empty results for invalid tmdbType
+                return res.json({
+                    posts: [],
+                    pagination: {
+                        page: parseInt(page),
+                        limit: parseInt(limit),
+                        total: 0,
+                        pages: 0
+                    }
+                });
+            }
+        }
+
+        // Filter by category
+        if (category) {
+            query.categories = { $in: [category] };
+        }
+
+        // Date range filter
+        if (dateFrom || dateTo) {
+            query.createdAt = {};
+            if (dateFrom) {
+                query.createdAt.$gte = new Date(dateFrom);
+            }
+            if (dateTo) {
+                query.createdAt.$lte = new Date(dateTo);
+            }
+        }
+
+        // Group filter
+        if (groupId) {
+            query.group = groupId;
+        }
+
+        // Sorting
+        sort[sortBy] = order === 'desc' ? -1 : 1;
+
+        // Calculate pagination
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        // Execute search
+        const posts = await Post.find(query)
+            .populate('author', 'username email profilePicture')
+            .populate('group', 'name')
+            .populate('likes', 'username')
+            .populate('comments.user', 'username')
+            .sort(sort)
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        // Get total count for pagination
+        const total = await Post.countDocuments(query);
+
+        res.json({
+            posts,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                pages: Math.ceil(total / parseInt(limit))
+            }
+        });
+
+    } catch (err) {
+        handleServerError(res, err, 'Error searching posts');
+    }
+};
