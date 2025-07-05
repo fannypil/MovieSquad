@@ -45,21 +45,27 @@ MovieSquad is a social platform designed for movie enthusiasts to connect, share
 
 2. **Install dependencies**
    ```bash
-   npm install express mongoose cors bcryptjs jsonwebtoken socket.io dotenv express-validator
+   npm install express mongoose cors bcryptjs jsonwebtoken socket.io dotenv express-validator axios
    ```
 
-3. **Environment Configuration**
+3. **Install development dependencies (for testing)**
+   ```bash
+   npm install --save-dev nodemon cross-env jest supertest
+   ```
+
+4. **Environment Configuration**
    
    Create a `.env` file in the root directory:
    ```env
    MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
    JWT_SECRET=your_jwt_secret_here
+   JWT_EXPIRE=1
    PORT=5000
    TMDB_API_KEY=your_tmdb_api_key_here
    CLIENT_URL=http://localhost:3000
    ```
 
-4. **Generate a secure JWT_SECRET**
+5. **Generate a secure JWT_SECRET**
    
    Run this command in your terminal to generate a strong JWT secret:
    ```bash
@@ -67,7 +73,7 @@ MovieSquad is a social platform designed for movie enthusiasts to connect, share
    ```
    Copy the output and paste it as your `JWT_SECRET` value in the `.env` file.
 
-5. **Start the server**
+6. **Start the server**
    ```bash
    node app.js 
    ```
