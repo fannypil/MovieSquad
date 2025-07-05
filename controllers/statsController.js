@@ -447,9 +447,9 @@ exports.getStatsSummary = async (req, res) => {
     }
 };
 
-module.exports = {
-    getPostsPerGroupMonthly,
-    getTopGenresByUserCount,
-    getPostsPerUserMonthly,
-    getStatsSummary
-};
+// module.exports = {
+//     getPostsPerGroupMonthly,
+//     getTopGenresByUserCount,
+//     getPostsPerUserMonthly,
+//     getStatsSummary
+// };

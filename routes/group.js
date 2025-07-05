@@ -39,4 +39,24 @@ router.get('/:id/watchlist', auth, authorizeRoles('user', 'groupAdmin', 'admin')
 router.put('/:id/join', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.joinGroup);
 router.post('/:id/invite', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.inviteToGroup);
 
+// Request to join a private group
+router.post('/:id/request-join', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.requestToJoinGroup);
+
+// Accept/Reject group invitation (for invitees)
+router.put('/invitations/:notificationId/accept', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.acceptGroupInvitation);
+router.put('/invitations/:notificationId/reject', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.rejectGroupInvitation);
+
+// Accept/Reject join request (for group admins)
+router.put('/:id/requests/:userId/accept', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.acceptJoinRequest);
+router.put('/:id/requests/:userId/reject', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.rejectJoinRequest);
+
+// Get pending join requests for a group (for group admins)
+router.get('/:id/requests', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.getPendingRequests);
+
+// Leave a group
+router.put('/:id/leave', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.leaveGroup);
+
+// Remove member from group (admin only)
+router.delete('/:id/members/:userId', auth, groupController.removeMember);
+
 module.exports = router;

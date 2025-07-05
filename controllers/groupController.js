@@ -2,6 +2,7 @@
 const Group= require('../models/Group');
 const User = require('../models/User');
 const { createNotification } = require('../utils/notificationService'); // Add this import
+const Notification = require('../models/Notification');
 
 // Helper function for consistent error handling
 const handleServerError = (res, err, message = 'Server error') => {
@@ -374,5 +375,346 @@ exports.inviteToGroup = async (req, res) => {
         res.json({ message: 'Group invitation sent successfully' });
     } catch (err) {
         handleServerError(res, err, 'Server Error sending group invitation');
+    }
+};
+// Request to join a private group
+exports.requestToJoinGroup = async (req, res) => {
+    const groupId = req.params.id;
+    const userId = req.user.id;
+
+    try {
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+
+        // Check if user is already a member
+        if (group.members.includes(userId)) {
+            return res.status(400).json({ message: 'You are already a member of this group.' });
+        }
+
+        // Check if user already has a pending request
+        if (group.pendingMembers.includes(userId)) {
+            return res.status(400).json({ message: 'You already have a pending request for this group.' });
+        }
+
+        // Add to pending members
+        group.pendingMembers.push(userId);
+        await group.save();
+
+        // CREATE NOTIFICATION: Notify group admin about join request
+        await createNotification(group.admin, 'group_join_request', {
+            senderId: userId,
+            entityId: groupId,
+            entityType: 'Group'
+        });
+
+        res.json({ message: 'Join request sent successfully' });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error sending join request');
+    }
+};
+
+// Accept group invitation (for invitees)
+exports.acceptGroupInvitation = async (req, res) => {
+    const notificationId = req.params.notificationId;
+    const userId = req.user.id;
+
+    try {
+        // Find the notification
+        const notification = await Notification.findById(notificationId);
+        if (!notification) {
+            return res.status(404).json({ message: 'Invitation not found.' });
+        }
+
+        // Verify this notification belongs to the user and is a group invite
+        if (notification.recipient.toString() !== userId || notification.type !== 'group_invite') {
+            return res.status(403).json({ message: 'Invalid invitation.' });
+        }
+
+        // Get the group
+        const group = await Group.findById(notification.entityId);
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+
+        // Check if user is already a member
+        if (group.members.includes(userId)) {
+            return res.status(400).json({ message: 'You are already a member of this group.' });
+        }
+
+        // Add user to group members
+        group.members.push(userId);
+        await group.save();
+
+        // Add group to user's groups
+        const user = await User.findById(userId);
+        if (user && !user.groups.includes(group._id)) {
+            user.groups.push(group._id);
+            await user.save();
+        }
+
+        // Mark notification as read and processed
+        notification.read = true;
+        await notification.save();
+
+        // CREATE NOTIFICATION: Notify group admin that user joined
+        await createNotification(group.admin, 'group_joined', {
+            senderId: userId,
+            entityId: group._id,
+            entityType: 'Group'
+        });
+
+        res.json({ message: 'Successfully joined the group', group });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error accepting group invitation');
+    }
+};
+
+// Reject group invitation (for invitees)
+exports.rejectGroupInvitation = async (req, res) => {
+    const notificationId = req.params.notificationId;
+    const userId = req.user.id;
+
+    try {
+        // Find the notification
+        const notification = await Notification.findById(notificationId);
+        if (!notification) {
+            return res.status(404).json({ message: 'Invitation not found.' });
+        }
+
+        // Verify this notification belongs to the user and is a group invite
+        if (notification.recipient.toString() !== userId || notification.type !== 'group_invite') {
+            return res.status(403).json({ message: 'Invalid invitation.' });
+        }
+
+        // Mark notification as read
+        notification.read = true;
+        await notification.save();
+
+        res.json({ message: 'Group invitation rejected' });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error rejecting group invitation');
+    }
+};
+
+// Accept join request (for group admins)
+exports.acceptJoinRequest = async (req, res) => {
+    const groupId = req.params.id;
+    const requesterId = req.params.userId;
+    const adminId = req.user.id;
+
+    try {
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+
+        // Check if user is group admin
+        if (group.admin.toString() !== adminId && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden: Only group admin can accept join requests.' });
+        }
+
+        // Check if requester is in pending members
+        if (!group.pendingMembers.includes(requesterId)) {
+            return res.status(400).json({ message: 'No pending request from this user.' });
+        }
+
+        // Check if user is already a member
+        if (group.members.includes(requesterId)) {
+            return res.status(400).json({ message: 'User is already a member of this group.' });
+        }
+
+        // Add to members and remove from pending
+        group.members.push(requesterId);
+        group.pendingMembers.pull(requesterId);
+        await group.save();
+
+        // Add group to user's groups
+        const user = await User.findById(requesterId);
+        if (user && !user.groups.includes(groupId)) {
+            user.groups.push(groupId);
+            await user.save();
+        }
+
+        // CREATE NOTIFICATION: Notify requester that request was accepted
+        await createNotification(requesterId, 'group_request_accepted', {
+            senderId: adminId,
+            entityId: groupId,
+            entityType: 'Group'
+        });
+
+        res.json({ message: 'Join request accepted successfully' });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error accepting join request');
+    }
+};
+
+// Reject join request (for group admins)
+exports.rejectJoinRequest = async (req, res) => {
+    const groupId = req.params.id;
+    const requesterId = req.params.userId;
+    const adminId = req.user.id;
+
+    try {
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+
+        // Check if user is group admin
+        if (group.admin.toString() !== adminId && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden: Only group admin can reject join requests.' });
+        }
+
+        // Check if requester is in pending members
+        if (!group.pendingMembers.includes(requesterId)) {
+            return res.status(400).json({ message: 'No pending request from this user.' });
+        }
+
+        // Remove from pending
+        group.pendingMembers.pull(requesterId);
+        await group.save();
+
+        // CREATE NOTIFICATION: Notify requester that request was rejected
+        await createNotification(requesterId, 'group_request_rejected', {
+            senderId: adminId,
+            entityId: groupId,
+            entityType: 'Group'
+        });
+
+        res.json({ message: 'Join request rejected' });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error rejecting join request');
+    }
+};
+
+// Get pending join requests for a group (for group admins)
+exports.getPendingRequests = async (req, res) => {
+    const groupId = req.params.id;
+    const adminId = req.user.id;
+
+    try {
+        const group = await Group.findById(groupId)
+            .populate('pendingMembers', 'username email profilePicture');
+        
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+
+        // Check if user is group admin
+        if (group.admin.toString() !== adminId && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden: Only group admin can view join requests.' });
+        }
+
+        res.json(group.pendingMembers);
+    } catch (err) {
+        handleServerError(res, err, 'Server Error fetching pending requests');
+    }
+};
+
+// Leave a group
+exports.leaveGroup = async (req, res) => {
+    const groupId = req.params.id;
+    const userId = req.user.id;
+
+    try {
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+
+        // Check if user is a member
+        if (!group.members.includes(userId)) {
+            return res.status(400).json({ message: 'You are not a member of this group.' });
+        }
+
+        // Admin cannot leave their own group (they must transfer ownership or delete the group)
+        if (group.admin.toString() === userId) {
+            return res.status(400).json({ 
+                message: 'As group admin, you cannot leave the group. Transfer ownership or delete the group instead.' 
+            });
+        }
+
+        // Remove user from group members
+        group.members.pull(userId);
+        await group.save();
+
+        // Remove group from user's groups
+        const user = await User.findById(userId);
+        if (user) {
+            user.groups.pull(groupId);
+            await user.save();
+        }
+
+        res.json({ message: 'Successfully left the group' });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error leaving group');
+    }
+};
+
+// Remove member from group (admin only)
+exports.removeMember = async (req, res) => {
+    const groupId = req.params.id;
+    const memberToRemove = req.params.userId;
+    const adminId = req.user.id;
+
+    try {
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+         // ADD DEBUG CODE HERE - Right before the authorization check
+        console.log('🔍 Debug Authorization:');
+        console.log('Group ID:', groupId);
+        console.log('Member to remove:', memberToRemove);
+        console.log('Group admin ID:', group.admin.toString());
+        console.log('Request user ID:', adminId);
+        console.log('Request user role:', req.user.role);
+        console.log('Request user object:', req.user);
+        console.log('Is group admin?', group.admin.toString() === adminId);
+        console.log('Is global admin?', req.user.role === 'admin');
+        console.log('Group members:', group.members.map(m => m.toString()));
+        console.log('Is target user a member?', group.members.includes(memberToRemove));
+
+
+        const isGroupAdmin = group.admin.toString() === adminId;
+        const isGlobalAdmin = req.user.role === 'admin';
+
+        if (!isGroupAdmin && !isGlobalAdmin) {
+            return res.status(403).json({ message: 'Forbidden: Only group admin can remove members.' });
+        }
+
+        // Cannot remove self (admin should use leave group instead)
+        if (memberToRemove === adminId) {
+            return res.status(400).json({ message: 'You cannot remove yourself. Use leave group instead.' });
+        }
+
+        // Check if user is a member
+        if (!group.members.includes(memberToRemove)) {
+            return res.status(400).json({ message: 'User is not a member of this group.' });
+        }
+
+        // Remove user from group members
+        group.members.pull(memberToRemove);
+        await group.save();
+
+        // Remove group from user's groups
+        const user = await User.findById(memberToRemove);
+        if (user) {
+            user.groups.pull(groupId);
+            await user.save();
+        }
+
+        // CREATE NOTIFICATION: Notify removed member
+        await createNotification(memberToRemove, 'group_removed', {
+            senderId: adminId,
+            entityId: groupId,
+            entityType: 'Group'
+        });
+
+        res.json({ message: 'Member removed successfully' });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error removing member');
     }
 };

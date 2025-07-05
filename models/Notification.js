@@ -19,8 +19,9 @@ const NotificationSchema = new mongoose.Schema({
         enum: [
             'like', 'comment', 'friend_request', 'friend_accepted',
             'group_invite', 'group_joined', 'group_watchlist_add',
+            'group_join_request', 'group_request_accepted', 'group_request_rejected', 'group_removed', // ✅ ADD THESE
             'new_private_message', 'admin_message', 'post_mentioned',
-            'shared_movie_recommendation' // Example of another potential type
+            'shared_movie_recommendation'
         ]
     },
     entityId: { // Optional: ID of the related entity (e.g., Post ID, Comment ID, Group ID, Message ID)

@@ -59,6 +59,18 @@ const createNotification = async (recipientId, type, { senderId = null, entityId
                 case 'shared_movie_recommendation':
                     message = `${senderUsername} recommended a movie to you.`;
                     break;
+                case 'group_join_request':
+                    message = `${senderUsername} requested to join your group.`;
+                    break;
+                case 'group_request_accepted':
+                    message = `Your request to join the group was accepted.`;
+                    break;
+                case 'group_request_rejected':
+                    message = `Your request to join the group was rejected.`;
+                    break;
+                case 'group_removed':
+                    message = `You were removed from the group.`;
+                    break;
                 default:
                     message = 'You have a new notification.';
             }
