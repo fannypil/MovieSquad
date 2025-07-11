@@ -73,13 +73,14 @@ exports.getTmdbDetails = async (req, res) =>{
 
 exports.getTmdbTrending = async (req, res) =>{
     const { type = 'movie', time_window = 'week' } = req.query;
-     if(!['movie', 'tv'].includes(type)) {
+     if(!['movie', 'tv','all'].includes(type)) {
         return res.status(400).json({ error: 'Invalid type. Must be "movie" or "tv".' });
     }
     if(!['day', 'week'].includes(time_window)) {
         return res.status(400).json({ error: 'Invalid time window. Must be "day" or "week".' });
     }
     try{
+        const tmdbType = type === 'all' ? 'all' : type;
         const response = await axios.get(`${TMDB_BASE_URL}/trending/${type}/${time_window}`, {
             params: {
                 api_key: TMDB_API_KEY
