@@ -53,6 +53,9 @@ router.put('/:id/requests/:userId/reject', auth, authorizeRoles('user', 'groupAd
 // Get pending join requests for a group (for group admins)
 router.get('/:id/requests', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.getPendingRequests);
 
+// Check if current user has pending request for a group
+router.get('/:id/my-request-status', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.checkMyRequestStatus);
+
 // Leave a group
 router.put('/:id/leave', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.leaveGroup);
 

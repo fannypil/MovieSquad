@@ -588,7 +588,29 @@ exports.rejectJoinRequest = async (req, res) => {
         handleServerError(res, err, 'Server Error rejecting join request');
     }
 };
+// Check if current user has pending request for a specific group
+exports.checkMyRequestStatus = async (req, res) => {
+    const groupId = req.params.id;
+    const userId = req.user.id;
 
+    try {
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return res.status(404).json({ message: 'Group not found.' });
+        }
+
+        // Check if user has pending request
+        const hasPendingRequest = group.pendingMembers.includes(userId);
+
+        res.json({ 
+            hasPendingRequest,
+            groupId,
+            userId 
+        });
+    } catch (err) {
+        handleServerError(res, err, 'Server Error checking request status');
+    }
+};
 // Get pending join requests for a group (for group admins)
 exports.getPendingRequests = async (req, res) => {
     const groupId = req.params.id;
@@ -664,19 +686,6 @@ exports.removeMember = async (req, res) => {
         if (!group) {
             return res.status(404).json({ message: 'Group not found.' });
         }
-         // ADD DEBUG CODE HERE - Right before the authorization check
-        console.log('🔍 Debug Authorization:');
-        console.log('Group ID:', groupId);
-        console.log('Member to remove:', memberToRemove);
-        console.log('Group admin ID:', group.admin.toString());
-        console.log('Request user ID:', adminId);
-        console.log('Request user role:', req.user.role);
-        console.log('Request user object:', req.user);
-        console.log('Is group admin?', group.admin.toString() === adminId);
-        console.log('Is global admin?', req.user.role === 'admin');
-        console.log('Group members:', group.members.map(m => m.toString()));
-        console.log('Is target user a member?', group.members.includes(memberToRemove));
-
 
         const isGroupAdmin = group.admin.toString() === adminId;
         const isGlobalAdmin = req.user.role === 'admin';
