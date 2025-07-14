@@ -206,18 +206,60 @@ module.exports = (io) => {
         //  Common Events:
         socket.on('typing', ({ groupId, recipientId }) => {
             if (groupId) {
-                socket.to(groupId).emit('typing', { userId: socket.user.id, username: socket.user.username, groupId });
+                socket.to(groupId).emit('userTyping', { 
+                    userId: socket.user.id, 
+                    username: socket.user.username, 
+                    groupId 
+                });
             } else if (recipientId) {
                 const chatIdentifier = getPrivateChatIdentifier(socket.user.id, recipientId);
-                socket.to(chatIdentifier).emit('typing', { userId: socket.user.id, username: socket.user.username, chatIdentifier });
+                socket.to(chatIdentifier).emit('userTyping', { 
+                    userId: socket.user.id, 
+                    username: socket.user.username, 
+                    chatIdentifier 
+                });
+                console.log(`⌨️ ${socket.user.username} is typing to ${recipientId} in ${chatIdentifier}`);
             }
         });
+
         socket.on('stopTyping', ({ groupId, recipientId }) => {
             if (groupId) {
-                socket.to(groupId).emit('stopTyping', { userId: socket.user.id, username: socket.user.username, groupId });
+                socket.to(groupId).emit('userStoppedTyping', { 
+                    userId: socket.user.id, 
+                    username: socket.user.username, 
+                    groupId 
+                });
             } else if (recipientId) {
                 const chatIdentifier = getPrivateChatIdentifier(socket.user.id, recipientId);
-                socket.to(chatIdentifier).emit('stopTyping', { userId: socket.user.id, username: socket.user.username, chatIdentifier });
+                socket.to(chatIdentifier).emit('userStoppedTyping', { 
+                    userId: socket.user.id, 
+                    username: socket.user.username, 
+                    chatIdentifier 
+                });
+                console.log(`⌨️ ${socket.user.username} stopped typing to ${recipientId} in ${chatIdentifier}`);
+            }
+        });
+        // Handle message read confirmation
+        socket.on('messageRead', async (data) => {
+            try {
+                const { messageId, chatIdentifier } = data;
+                
+                // Update message as read in database
+                await Message.findByIdAndUpdate(messageId, { 
+                    $addToSet: { readBy: socket.user.id }
+                });
+                
+                // Notify sender that message was read
+                socket.to(chatIdentifier).emit('messageReadStatus', {
+                    messageId,
+                    status: 'read',
+                    readAt: new Date(),
+                    readBy: socket.user.username
+                });
+                
+                console.log(`👁️ Message ${messageId} read by ${socket.user.username}`);
+            } catch (error) {
+                console.error('❌ Error handling message read:', error);
             }
         });
         // Handle Disconnect

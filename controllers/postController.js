@@ -163,7 +163,12 @@ exports.updatePost = async (req, res) => {
         }else if(groupId === null) {
             post.group = undefined; 
         }
+        
         await post.save();
+        
+        // ✅ Populate the author field before returning
+        await post.populate('author', 'username email _id');
+        
         res.json(post);
     }catch(err){
         handleServerError(res, err, 'Server error updating post');

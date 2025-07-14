@@ -13,6 +13,9 @@ router.get('/top-genres', statsController.getTopGenresByUserCount);
 // Get posts per user per month for the last 12 months, GET /api/stats/posts-per-user-monthly
 router.get('/posts-per-user-monthly', statsController.getPostsPerUserMonthly);
 
+// Get comprehensive group statistics, GET /api/stats/group/:groupId
+router.get('/group/:groupId', auth, statsController.getGroupStatistics);
+
 // Get comprehensive statistics summary, GET /api/stats/summary
 router.get('/summary', auth, authorizeRoles('admin'), statsController.getStatsSummary);
 

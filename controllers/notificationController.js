@@ -8,13 +8,16 @@ const handleServerError = (res, err, message = 'Server error') => {
     }
     res.status(500).json({ message: message });
 };
-
+// Helper function to get user ID consistently
+const getUserId = (req) => {
+    return req.user.id || req.user._id;
+};
 // @desc    Get all notifications for the authenticated user
 // @route   GET /api/notifications/me
 // @access  Private
 exports.getMyNotifications = async (req, res) => {
     try {
-        const notifications = await Notification.find({ recipient: req.user.id })
+        const notifications = await Notification.find({ recipient: getUserId(req)})
             .populate('sender', 'username profilePicture')
             .sort({ createdAt: -1 }); // Most recent first
 

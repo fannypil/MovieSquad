@@ -15,7 +15,7 @@ exports.getMyPostsActivity = async (req, res) => {
     try {
         const myPosts = await Post.find({ author: req.user.id })
             .populate('author', 'username profilePicture')
-            .populate('groupId', 'name')
+            .populate('group', 'name')
             .sort({ createdAt: -1 })
             .limit(20)
             .select('content tmdbTitle tmdbType tmdbPosterPath groupId createdAt likes comments');
@@ -40,7 +40,7 @@ exports.getFriendsPostsFeed = async (req, res) => {
             author: { $in: friendsAndSelf }
         })
         .populate('author', 'username profilePicture')
-        .populate('groupId', 'name')
+        .populate('group', 'name')
         .populate('comments.user', 'username profilePicture')
         .sort({ createdAt: -1 })
         .limit(50);
@@ -77,10 +77,10 @@ exports.getUserPostsActivity = async (req, res) => {
 
         const userPosts = await Post.find({ author: userId })
             .populate('author', 'username profilePicture')
-            .populate('groupId', 'name')
+            .populate('group', 'name')
             .sort({ createdAt: -1 })
             .limit(20)
-            .select('content tmdbTitle tmdbType tmdbPosterPath groupId createdAt likes comments');
+            .select('content tmdbTitle tmdbType tmdbPosterPath group createdAt likes comments'); // Fixed: changed 'groupId' to 'group'
 
         res.json(userPosts);
     } catch (err) {

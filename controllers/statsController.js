@@ -447,9 +447,142 @@ exports.getStatsSummary = async (req, res) => {
     }
 };
 
-// module.exports = {
-//     getPostsPerGroupMonthly,
-//     getTopGenresByUserCount,
-//     getPostsPerUserMonthly,
-//     getStatsSummary
-// };
+// Add this new function to the existing statsController.js
+
+/**
+ * Get comprehensive group statistics
+ * Endpoint: GET /api/stats/group/:groupId
+ * Access: Group members only
+ */
+exports.getGroupStatistics = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+        
+        if (!mongoose.Types.ObjectId.isValid(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid group ID'
+            });
+        }
+
+        // Check if group exists
+        const group = await Group.findById(groupId).populate('members', 'username');
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: 'Group not found'
+            });
+        }
+
+        // Get date range for last 12 months
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+        // Generate all months for the last 12 months
+        const months = [];
+        for (let i = 11; i >= 0; i--) {
+            const date = new Date();
+            date.setMonth(date.getMonth() - i);
+            months.push({
+                month: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                monthKey: date.toISOString().substring(0, 7), // YYYY-MM format
+                posts: 0
+            });
+        }
+
+        // Get monthly posts data
+        const monthlyPostsData = await Post.aggregate([
+            {
+                $match: {
+                    group: new mongoose.Types.ObjectId(groupId),
+                    createdAt: { $gte: twelveMonthsAgo }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: {
+                            format: "%Y-%m",
+                            date: "$createdAt"
+                        }
+                    },
+                    posts: { $sum: 1 }
+                }
+            }
+        ]);
+
+        // Merge actual data with empty months
+        const monthlyPosts = months.map(month => {
+            const found = monthlyPostsData.find(data => data._id === month.monthKey);
+            return {
+                month: month.month,
+                posts: found ? found.posts : 0
+            };
+        });
+
+        // Get top contributors
+        const topContributors = await Post.aggregate([
+            {
+                $match: {
+                    group: new mongoose.Types.ObjectId(groupId)
+                }
+            },
+            {
+                $group: {
+                    _id: "$author",
+                    postCount: { $sum: 1 }
+                }
+            },
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "_id",
+                    foreignField: "_id",
+                    as: "userInfo"
+                }
+            },
+            {
+                $unwind: "$userInfo"
+            },
+            {
+                $project: {
+                    userId: "$_id",
+                    username: "$userInfo.username",
+                    postCount: 1
+                }
+            },
+            {
+                $sort: { postCount: -1 }
+            },
+            {
+                $limit: 10
+            }
+        ]);
+
+        // Get total posts count
+        const totalPosts = await Post.countDocuments({ group: groupId });
+
+        // Get watchlist items count (if you have a watchlist collection)
+        // For now, we'll set it to 0 or calculate from your watchlist logic
+        const watchlistItems = 0; // TODO: Replace with actual watchlist count
+
+        // Calculate days active
+        const daysActive = Math.ceil((Date.now() - new Date(group.createdAt)) / (1000 * 60 * 60 * 24));
+
+        res.status(200).json({
+            success: true,
+            message: 'Group statistics retrieved successfully',
+            monthlyPosts,
+            topContributors,
+            totalPosts,
+            watchlistItems,
+            daysActive,
+            memberCount: group.members.length,
+            groupName: group.name,
+            groupId: groupId
+        });
+
+    } catch (error) {
+        handleServerError(res, error, 'Error retrieving group statistics');
+    }
+};
