@@ -31,13 +31,25 @@ const userSchema= new mongoose.Schema({
         enum: ['user','groupAdmin', 'admin'],
         default: 'user'
     },
-     profilePicture: { // Optional: for user avatars
+      profilePicture: {
         type: String,
-        default: 'no-avatar.jpg' // Default image or link
+        default: 'https://www.w3schools.com/howto/img_avatar.png',
+        validate: {
+        validator: function(value) {
+            // Skip validation for null/empty values and the default avatar
+            if (!value || value === 'https://www.w3schools.com/howto/img_avatar.png') {
+                return true;
+            }
+            // Import here to avoid circular dependency
+            const { isValidAvatar } = require('../config/avatars');
+            return isValidAvatar(value);
+        },
+        message: 'Invalid profile picture URL'
+    }
     },
     bio: { // Optional: short user description
         type: String,
-        maxlength: [200, 'Bio cannot be more than 200 characters.'],
+        maxlength: [500, 'Bio cannot be more than 200 characters.'],
         trim: true
     },
     // Optional: Add fields for tracking content, groups, etc.
@@ -45,13 +57,17 @@ const userSchema= new mongoose.Schema({
         {
             tmdbId:{type: Number, required: true},
             tmdbType:{type: String, enum:['movie', 'tv'], required: true},
+            title: { type: String, required: true },
             watchedDate: {type: Date, default: Date.now},
+            posterPath: { type: String },
         }
     ],
     favoriteMovies:[
         {
             tmdbId:{type: Number, required: true},
             title:{type: String, required: true},
+            tmdbType:{type: String, enum:['movie', 'tv'], required: true},
+            posterPath: { type: String },
         }
     ],
      favoriteGenres:[ // Add this field

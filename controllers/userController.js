@@ -1,6 +1,7 @@
 const User = require('../models/User')
 const jwt= require('jsonwebtoken');
 const { createNotification } = require('../utils/notificationService'); // Add this import
+const { isValidAvatar, getAvatarUrl } = require('../config/avatars');
 
 // Get current logged in user (profile) , /api/user/me
 exports.getMe = async (req, res) => {
@@ -20,28 +21,63 @@ exports.getMe = async (req, res) => {
 exports.updateMe = async (req, res) => {
     const {username, email, bio, profilePicture} = req.body;
     const fieldsToUpdate ={};
+    
     if (username) fieldsToUpdate.username = username;
     if (email) fieldsToUpdate.email = email;
-    if (bio!==undefined) fieldsToUpdate.bio = bio;
-    if (profilePicture!==undefined) fieldsToUpdate.profilePicture = profilePicture;
+    if (bio !== undefined) fieldsToUpdate.bio = bio;
+    
+    // Enhanced avatar validation
+    if (profilePicture !== undefined) {
+        if (profilePicture === null || profilePicture === '') {
+            // Allow removing avatar
+            fieldsToUpdate.profilePicture = null;
+        } else {
+            // Validate avatar
+            if (!isValidAvatar(profilePicture)) {
+                return res.status(400).json({ 
+                    success: false,
+                    message: 'Invalid profile picture. Please select from available avatars.' 
+                });
+            }
+            
+            // Convert ID to URL if necessary
+            const avatarUrl = getAvatarUrl(profilePicture);
+            fieldsToUpdate.profilePicture = avatarUrl;
+        }
+    }
 
     try{
        const user = await User.findByIdAndUpdate(
-            req.user.id, // ID from authenticated user
+            req.user.id,
             { $set: fieldsToUpdate },
-            { new: true, runValidators: true } // Return the updated document, run schema validators
-        ).select('-password'); // Don't return password
+            { new: true, runValidators: true }
+        ).select('-password');
+        
         if (!user) {
-            return res.status(404).json({ message: 'User not found' });
+            return res.status(404).json({ 
+                success: false,
+                message: 'User not found' 
+            });
         }
-        res.json(user);
+        
+        res.json({
+            success: true,
+            data: user,
+            message: 'Profile updated successfully'
+        });
     }catch(err){
         console.error(err.message);
         // handle unique fields errors
         if(err.code === 11000){
-            return res.status(400).json({ msg: 'User with this email or username already exists' });
+            return res.status(400).json({ 
+                success: false,
+                msg: 'User with this email or username already exists' 
+            });
         }
-        res.status(500).send('Server Error');
+        res.status(500).json({
+            success: false,
+            message: 'Server Error'
+        });
     }
 }
 
@@ -76,10 +112,10 @@ exports.updateProfileSettings = async (req, res) => {
 
 // Add a watched content to the user's profile, /api/user/me/watched
 exports.addWatchedContent = async (req, res) => {
-    const { tmdbId, tmdbType, watchedDate } = req.body;
+    const { tmdbId, tmdbType,title, watchedDate, posterPath } = req.body;
 
-    if(!tmdbId || !tmdbType) {
-        return res.status(400).json({ message: 'TMDB ID and type are required' });
+    if(!tmdbId || !tmdbType|| !title) {
+        return res.status(400).json({ message: 'TMDB ID,Title and type are required' });
     }
     if( !['movie', 'tv'].includes(tmdbType)) {
         return res.status(400).json({ message: 'tmdbType must be either "movie" or "tv".' });
@@ -99,8 +135,10 @@ exports.addWatchedContent = async (req, res) => {
         }
         user.watchedContent.unshift({
             tmdbId: parseInt(tmdbId), // Convert to number
-            tmdbType,
-            watchedDate: watchedDate || Date.now()
+            tmdbType: tmdbType, 
+            title: title,
+            watchedDate: watchedDate || Date.now(),
+            posterPath: posterPath || null // Optional field
         });
         await user.save();
         res.json(user.watchedContent);
@@ -132,10 +170,18 @@ exports.removeWatchedContent = async (req, res) =>{
 }
 // -- ROUTES FOR MANAGING MOVIE GENRES --
 exports.addFavoriteMovie = async (req, res) => {
-    const { tmdbId, title } = req.body;
     
-    if (!tmdbId || !title) {
-        return res.status(400).json({ message: 'TMDB ID and title are required for a favorite movie.' });
+    const { tmdbId, title,tmdbType,posterPath } = req.body;
+    
+     if (!tmdbId || !title || !tmdbType) {
+        return res.status(400).json({ 
+            message: 'TMDB ID, title, and type are required for a favorite movie.' 
+        });
+    }
+     if (!['movie', 'tv'].includes(tmdbType)) {
+        return res.status(400).json({ 
+            message: 'tmdbType must be either "movie" or "tv".' 
+        });
     }
     
     try {
@@ -151,11 +197,15 @@ exports.addFavoriteMovie = async (req, res) => {
         if (alreadyFavorited) {
             return res.status(400).json({ message: 'Movie already in favorite list.' });
         }
-        
-        user.favoriteMovies.unshift({
+        const newFavorite = {
             tmdbId: parseInt(tmdbId),
-            title
-        });
+            title: title,
+            tmdbType: tmdbType,
+            posterPath: posterPath || ''
+        };
+
+        user.favoriteMovies.unshift(newFavorite);
+
         
         await user.save();
         res.json(user.favoriteMovies);
@@ -403,24 +453,37 @@ exports.addFriend = async (req, res) => {
 // Remove a user from current user's friends list
 exports.removeFriend = async (req, res) => {
     const { friendId } = req.params;
+    const currentUserId = req.user.id;
     
     try {
-        const user = await User.findById(req.user.id);
+        const user = await User.findById(currentUserId);
+        const friend = await User.findById(friendId);
         if (!user) {
             return res.status(404).json({ message: 'User not found.' });
         }
-        
-        const initialLength = user.friends.length;
-        user.friends = user.friends.filter(id => id.toString() !== friendId);
-        
-        if (user.friends.length === initialLength) {
-            return res.status(404).json({ message: 'Friend not found in list.' });
+        if (!friend) {
+            return res.status(404).json({ message: 'Friend not found.' });
         }
-        
+
+        // Check if friendId is in user's friends list
+        if (!user.friends.includes(friendId)) {
+            return res.status(404).json({ message: 'This user is not in your friends list.' });
+        }
+        // Remove friendId from user's friends list
+        user.friends = user.friends.filter(id => id.toString() !== friendId);
+        // Remove currentUserId from friend's friends list
+        friend.friends = friend.friends.filter(id => id.toString() !== currentUserId);
+
         await user.save();
-        res.json(user.friends);
+        await friend.save();
+
+        res.json({ 
+            message: 'Friend removed successfully from both friends lists',
+            remainingFriends: user.friends 
+        });
+
     } catch (err) {
-        console.error(err.message);
+        console.error('Error removing friend:', err);
         res.status(500).send('Server Error');
     }
 };

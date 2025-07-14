@@ -18,6 +18,7 @@ const conversationRoutes = require('./routes/conversation')
 const notificationRoutes = require('./routes/notification');
 const activityRoutes = require('./routes/activity');
 const statsRoutes = require('./routes/stats');
+const avatarRoutes = require('./routes/avatar');
 
 
 const socketHandler = require('./sockets/socketHandler');
@@ -65,6 +66,7 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/avatars',avatarRoutes);
 
 // define a simple route for testing
 app.get('/',(req, res)=>{
