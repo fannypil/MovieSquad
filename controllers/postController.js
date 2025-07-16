@@ -41,12 +41,6 @@ exports.createPost = async (req, res) => {
             if (!group) {
                 return res.status(404).json({ message: 'Group not found' });
             }
-            // Optional: You might want to add a check here that only group members can post to a group.
-            // For now, we'll allow any authenticated user to post to an existing group.
-            // If group.isPrivate is true, you might want to enforce membership check:
-            // if (group.isPrivate && !group.members.includes(req.user.id)) {
-            //     return res.status(403).json({ msg: 'Forbidden: You are not a member of this private group' });
-            // }
         }
         const newPost =new Post({
             author: req.user.id, // Assign the authenticated user as the author
@@ -62,19 +56,7 @@ exports.createPost = async (req, res) => {
             // Likes and comments start empty by default
         });
         await newPost.save();
-           // Optional: Update User and Group models to reference this post if you track posts there
-        // This part depends on if your User/Group models have a 'posts' array.
-        // For example, if User model has 'posts' array:
-        // const user = await User.findById(req.user.id);
-        // if (user) {
-        //     user.posts.push(post._id);
-        //     await user.save();
-        // }
-        // If Group model has 'posts' array:
-        // if (group) {
-        //     group.posts.push(post._id);
-        //     await group.save();
-        // }
+
         res.status(201).json(newPost);
     }catch(err){
         handleServerError(res, err, 'Server error creating post');
@@ -163,10 +145,9 @@ exports.updatePost = async (req, res) => {
         }else if(groupId === null) {
             post.group = undefined; 
         }
-        
+    
         await post.save();
-        
-        // ✅ Populate the author field before returning
+
         await post.populate('author', 'username email _id');
         
         res.json(post);
@@ -202,21 +183,6 @@ exports.deletePost = async (req, res) => {
         }
         // Delete the post
         await Post.deleteOne({ _id: postId });
-
-        // Optional: Remove this post from any user's or group's 'posts' arrays if tracked
-        // (Similar to how we handled group deletion)
-        // const user = await User.findById(post.author);
-        // if (user && user.posts) {
-        //     user.posts.pull(postId); // Assuming 'posts' is an array of ObjectIds in User schema
-        //     await user.save();
-        // }
-        // if (post.group) {
-        //     const group = await Group.findById(post.group);
-        //     if (group && group.posts) {
-        //         group.posts.pull(postId); // Assuming 'posts' is an array of ObjectIds in Group schema
-        //         await group.save();
-        //     }
-        // }
         res.json({ msg: 'Post removed successfully' });
     }catch(err){
         handleServerError(res, err, 'Server error deleting post');
@@ -414,7 +380,6 @@ exports.searchPosts = async (req, res) => {
             if (['movie', 'tv'].includes(tmdbType)) {
                 query.tmdbType = tmdbType;
             } else {
-                // ✅ FIX: Return empty results for invalid tmdbType
                 return res.json({
                     posts: [],
                     pagination: {

@@ -19,4 +19,6 @@ router.get('/group/:groupId', auth, statsController.getGroupStatistics);
 // Get comprehensive statistics summary, GET /api/stats/summary
 router.get('/summary', auth, authorizeRoles('admin'), statsController.getStatsSummary);
 
+router.get('/stats-for-home', statsController.getSummaryStats);
+
 module.exports = router;

@@ -586,3 +586,18 @@ exports.getGroupStatistics = async (req, res) => {
         handleServerError(res, error, 'Error retrieving group statistics');
     }
 };
+
+exports.getSummaryStats = async (req, res) => {
+    try {
+        const reviewCount = await Post.countDocuments({ categories: 'review' });
+        const activeGroupsCount = await Group.countDocuments({});
+        const discussionsCount = await Post.countDocuments({ categories: 'discussion' });
+        res.json({
+            reviewCount,
+            activeGroupsCount,
+            discussionsCount
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Server error', details: err.message });
+    }
+};
