@@ -110,6 +110,16 @@ exports.discoverTmdb = async (req, res)=>{
     if(!['movie', 'tv'].includes(type)) {
         return res.status(400).json({ error: 'Invalid type. Must be "movie" or "tv".' });
     }
+    // Limit year to current year
+    const currentYear = new Date().getFullYear();
+    let limitedPrimaryReleaseYear = primary_release_year;
+    let limitedFirstAirDateYear = first_air_date_year;
+    if (primary_release_year && Number(primary_release_year) > currentYear) {
+        limitedPrimaryReleaseYear = currentYear;
+    }
+    if (first_air_date_year && Number(first_air_date_year) > currentYear) {
+        limitedFirstAirDateYear = currentYear;
+    }
 
     let tmdbPath= `/discover/${type}`;
     const params={
