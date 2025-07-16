@@ -142,3 +142,40 @@ exports.discoverTmdb = async (req, res)=>{
         handleTmdbError(res, err, `discovering ${type} content`);
     }
 }
+
+// Get videos (trailers) for a specific movie
+exports.getTmdbVideos = async (req, res) => {
+    console.log('getTmdbVideos called'); // Add this line
+    const { movieId } = req.params;
+    let { type } = req.query;
+    console.log('movieId:', movieId, 'type:', type); // Debug log
+    console.log('movieId:', movieId, 'type:', type, 'req.query:', req.query);
+    // Sanitize type
+    if (type) type = type.trim().toLowerCase();
+
+    if (!movieId || !type || !["movie", "tv"].includes(type)) {
+        return res.status(400).json({ error: 'Invalid type. Must be "movie" or "tv".' });
+    }
+    try {
+        const endpoint =
+            type === "movie"
+                ? `https://api.themoviedb.org/3/movie/${movieId}/videos`
+                : `https://api.themoviedb.org/3/tv/${movieId}/videos`;
+
+        const response = await axios.get(endpoint, {
+            params: { api_key: process.env.TMDB_API_KEY }
+        });
+        const videos = response.data.results || [];
+        const trailer = videos.find(
+            v => v.type === "Trailer" && v.site === "YouTube"
+        );
+        res.json({
+            trailer: trailer || null,
+            videos
+        });
+    } catch (err) {
+        console.error("Error fetching TMDB videos:", err.message);
+        res.status(500).json({ error: "Failed to fetch trailer info" });
+    }
+};
+
