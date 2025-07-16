@@ -51,9 +51,9 @@ exports.createGroup = async (req, res) => {
             }
             if (!user.groups.includes(group._id)) {
                 user.groups.push(group._id);
-                await user.save();
             }
-        }
+            await user.save();
+        } 
         res.status(201).json(group); // 201 Created
 
     }catch(err){

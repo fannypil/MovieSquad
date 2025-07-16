@@ -21,10 +21,10 @@ router.get('/', groupController.getAllGroups);
 router.get('/:id', groupController.getGroupById);
 
 // PUT /api/groups/:id , Update a group (only groupAdmin or admin can update)
-router.put('/:id', auth, authorizeRoles('groupAdmin', 'admin'), groupController.updateGroup);
+router.put('/:id', auth, authorizeRoles('groupAdmin', 'admin','user'), groupController.updateGroup);
 
 // DELETE /api/groups/:id , Delete a group (only groupAdmin or admin can delete)
-router.delete('/:id', auth, authorizeRoles('groupAdmin', 'admin'), groupController.deleteGroup);
+router.delete('/:id', auth, authorizeRoles('groupAdmin', 'admin','user'), groupController.deleteGroup);
 
 //  Add a movie/TV show to a group's shared watchlist, POST /api/groups/:id/watchlist
 router.post('/:id/watchlist', auth, authorizeRoles('user', 'groupAdmin', 'admin'), groupController.addToSharedWatchlist);
