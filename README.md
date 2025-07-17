@@ -87,45 +87,45 @@ MovieSquad is a social platform designed for movie enthusiasts to connect, share
 ```
 MovieSquadBackend/
 ├── config/
-│   ├── db.js                 # MongoDB connection configuration
-│   └── avatars.js
+│   ├── db.js                       # MongoDB connection configuration
+│   └── avatars.js                  # vatar options & validation
 ├── controllers/
-│   ├── authController.js     # Authentication logic
-│   ├── userController.js
-│   ├── groupController.js
-│   ├── postController.js
-│   ├── activityController.js
-│   ├── avatarController.js
-│   ├── conversationController.js
-│   ├── notificationController.js
-│   ├── statsController.js
-│   └── tmdbController.js
+│   ├── authController.js           # Authentication logic
+│   ├── userController.js           # User profile logic
+│   ├── groupController.js          # Group management logic
+│   ├── postController.js           # Posts logic
+│   ├── activityController.js       # Activity tracking (own profile/feed ..)
+│   ├── avatarController.js         # Avatar API
+│   ├── conversationController.js   # Chat logic
+│   ├── notificationController.js   # Notification logic
+│   ├── statsController.js          # Stats endpoints
+│   └── tmdbController.js           # TMDB API integration
 ├── middleware/
 │   ├── authMiddleware.js     # JWT authentication middleware
-│   └── authorizeRoles.js
+│   └── authorizeRoles.js     # Role-based access
 ├── models/
 │   ├── User.js              # User schema and model
 │   ├── Group.js             # Group schema and model
 │   ├── Post.js              # Post schema and model
-│   ├── Notification.js      
-│   └── Message.js
+│   ├── Notification.js      # Notification schema/model
+│   └── Message.js           # Chat message schema/model
 ├── routes/
 │   ├── auth.js              # Authentication routes
-│   ├── user.js
-│   ├── group.js
-│   ├── post.js
-│   ├── stats.js
-│   ├── activity.js
-│   ├── admin.js
-│   ├── avatar.js
-│   ├── conversation.js
-│   ├── notification.js
-│   └──tmdb.js
+│   ├── user.js              # User routes
+│   ├── group.js             # Group routes
+│   ├── post.js              # Post routes
+│   ├── stats.js             # Stats routes
+│   ├── activity.js          # Activity routes
+│   ├── admin.js             # Admin routes
+│   ├── avatar.js            # Avatar routes
+│   ├── conversation.js      # Chat routes
+│   ├── notification.js      # Notification routes
+│   └──tmdb.js               # TMDB routes
 ├── sockets/
-│   └── socketHandler.js
+│   └── socketHandler.js         # Real-time socket logic
 ├── utils/
-│   └── notificationService.js
-├── tests/
+│   └── notificationService.js   # Notification helpers
+├── tests/                       # # API tests
 │   ├── api.test.js
 │   ├── notifications.test.js
 │   ├── post-search.test.js
