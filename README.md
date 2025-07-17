@@ -14,6 +14,8 @@ MovieSquad is a social platform designed for movie enthusiasts to connect, share
 - **Social Posts** - Share movie reviews, recommendations, and discussions
 - **Real-time Chat** - Socket.io powered real-time messaging
 - **Movie Integration** - TMDB API integration for movie data
+- **Notifications** — Real-time and persistent notifications
+- **Role-Based Access Control** — User, groupAdmin, and admin permissions
 - **Secure API** - Protected routes with middleware authentication
 
 ## 🛠️ Tech Stack
@@ -27,8 +29,10 @@ MovieSquad is a social platform designed for movie enthusiasts to connect, share
 - **Validation**: express-validator
 - **Environment Management**: dotenv
 - **CORS**: cors middleware
+- **HTTP Requests:** axios
 
-## 📦 Installation
+
+## 📦 Installation 
 
 ### Prerequisites
 - Node.js (v14 or higher)
@@ -39,7 +43,7 @@ MovieSquad is a social platform designed for movie enthusiasts to connect, share
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/fannypil/MovieSquad.git
    cd MovieSquadBackend
    ```
 
@@ -77,29 +81,55 @@ MovieSquad is a social platform designed for movie enthusiasts to connect, share
    ```bash
    node app.js 
    ```
-   
-   For development with auto-reload:
-   ```bash
-   npm run dev
-   ```
 
 ## 🏗️ Project Structure
 
 ```
 MovieSquadBackend/
 ├── config/
-│   └── db.js                 # MongoDB connection configuration
+│   ├── db.js                 # MongoDB connection configuration
+│   └── avatars.js
 ├── controllers/
-│   └── authController.js     # Authentication logic
+│   ├── authController.js     # Authentication logic
+│   ├── userController.js
+│   ├── groupController.js
+│   ├── postController.js
+│   ├── activityController.js
+│   ├── avatarController.js
+│   ├── conversationController.js
+│   ├── notificationController.js
+│   ├── statsController.js
+│   └── tmdbController.js
 ├── middleware/
-│   └── authMiddleware.js     # JWT authentication middleware
+│   ├── authMiddleware.js     # JWT authentication middleware
+│   └── authorizeRoles.js
 ├── models/
 │   ├── User.js              # User schema and model
 │   ├── Group.js             # Group schema and model
-│   └── Post.js              # Post schema and model
+│   ├── Post.js              # Post schema and model
+│   ├── Notification.js      
+│   └── Message.js
 ├── routes/
 │   ├── auth.js              # Authentication routes
-│   └── user.js              # User profile routes
+│   ├── user.js
+│   ├── group.js
+│   ├── post.js
+│   ├── stats.js
+│   ├── activity.js
+│   ├── admin.js
+│   ├── avatar.js
+│   ├── conversation.js
+│   ├── notification.js
+│   └──tmdb.js
+├── sockets/
+│   └── socketHandler.js
+├── utils/
+│   └── notificationService.js
+├── tests/
+│   ├── api.test.js
+│   ├── notifications.test.js
+│   ├── post-search.test.js
+│   └── setup.js
 ├── .env                     # Environment variables (not in repo)
 ├── .gitignore              # Git ignore file
 ├── app.js                  # Main application file
@@ -113,13 +143,49 @@ MovieSquadBackend/
 - `POST /api/auth/login` - Login user and get JWT token
 
 ### User Routes (Protected)
-- `GET /api/user/me` - Get current user profile
+- `GET /api/user/me` — Get current user profile
+- `PUT /api/user/me` — Update profile
+- `PUT /api/user/me/settings` — Update privacy settings
+- `PUT /api/user/me/watched` — Add watched content
+- `PUT /api/user/me/favorite-movies` — Add favorite movie
+- `PUT /api/user/me/genres` — Add favorite genre
+- `GET /api/user/me/friends` — Get friends list
+- `POST /api/user/friends/request` — Send friend request
+### Groups
 
+- `POST /api/groups` — Create group
+- `GET /api/groups` — List groups
+- `PUT /api/groups/:id/join` — Join public group
+- `POST /api/groups/:id/request-join` — Request to join private group
+- `POST /api/groups/:id/invite` — Invite user to group
+
+### Posts
+
+- `POST /api/posts` — Create post
+- `GET /api/posts` — List posts
+- `PUT /api/posts/:id/like` — Like/unlike post
+- `POST /api/posts/:id/comments` — Add comment
+
+### Stats
+
+- `GET /api/stats/summary` — Get platform statistics
+
+### Notifications
+
+- `GET /api/notifications/me` — Get notifications
+- `PUT /api/notifications/:id/read` — Mark notification as read
+
+---
 
 ## 🔒 Authentication
 
-The API uses JWT (JSON Web Tokens) for authentication. Include the token in the `x-auth-token` header for protected routes.
+All protected routes require a JWT token in the `x-auth-token` header:
 
+```
+x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+---
 **Token Format:**
 ```
 x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -130,27 +196,32 @@ x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ### User Model
 - Username, email, password (hashed)
 - Role management (user, groupAdmin, admin)
-- Movie tracking (watched, favorites)
-- Social connections (groups, friends)
+- Watched content, favorite movies, favorite genres
+- Groups, friends, friend requests
 
 ### Group Model
-- Group information and privacy settings
-- Member management with admin controls
-- Pending member requests
+- Name, description, privacy
+- Admin, members, pending requests
 
 ### Post Model
-- Content creation with TMDB integration
-- Categorization and tagging
-- Like and comment system
+- Content, TMDB info, categories, likes, comments
 
-## 🔧 Development
 
-### Testing with Postman
+## 🧪 Testing
 
-1. **Start the server**
-2. **Register a user** via `POST /api/auth/register`
-3. **Login** via `POST /api/auth/login` to get your JWT token
-4. **Test protected routes** by including the token in `x-auth-token` header
+Run all tests with:
+
+```bash
+npm test
+```
+
+---
+
+## 🧑‍💻 Development Tips
+
+- Use [Postman](https://www.postman.com/) or [Insomnia](https://insomnia.rest/) to test API endpoints.
+- For real-time features, use [Socket.io Client](https://socket.io/docs/v4/client-api/) in your frontend.
+- For production, build your frontend and serve `index.html` for all non-API routes.
 
 ---
 
