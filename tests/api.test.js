@@ -86,26 +86,24 @@ describe("Movie Squad API Tests", () => {
         .set("x-auth-token", userToken1)
         .send({
           bio: "Movie enthusiast and film critic",
-          profilePicture: "new-avatar.jpg",
+          profilePicture: "https://www.w3schools.com/howto/img_avatar.png",
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.bio).toBe("Movie enthusiast and film critic");
+      expect(res.body.data.bio).toBe("Movie enthusiast and film critic");
     });
 
-    test("Should update profile settings", async () => {
+    test("Should update profile", async () => {
       const res = await request(app)
-        .put("/api/user/me/settings")
+        .put("/api/user/me")
         .set("x-auth-token", userToken1)
         .send({
-          isPublic: false,
-          showWatchedContent: true,
-          showFavorites: false,
+          bio: "Movie enthusiast and film critic",
+          profilePicture: "https://www.w3schools.com/howto/img_avatar.png",
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.isPublic).toBe(false);
-      expect(res.body.showFavorites).toBe(false);
+      expect(res.body.data.bio).toBe("Movie enthusiast and film critic");
     });
   });
 
@@ -173,6 +171,7 @@ describe("Movie Squad API Tests", () => {
         .send({
           tmdbId: 27205,
           tmdbType: "movie",
+          title: "Inception",
         });
 
       expect(res.status).toBe(200);
@@ -186,6 +185,7 @@ describe("Movie Squad API Tests", () => {
         .send({
           tmdbId: 27205,
           title: "Inception",
+          tmdbType: "movie",
         });
 
       expect(res.status).toBe(200);
