@@ -1,6 +1,6 @@
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
-const { createNotification } = require("../utils/notificationService"); // Add this import
+const { createNotification } = require("../utils/notificationService");
 const { isValidAvatar, getAvatarUrl } = require("../config/avatars");
 
 // Get current logged in user (profile) , /api/user/me
@@ -258,11 +258,9 @@ exports.addFavoriteGenre = async (req, res) => {
   const { genre } = req.body;
 
   if (!genre || typeof genre !== "string" || genre.trim() === "") {
-    return res
-      .status(400)
-      .json({
-        message: "Genre name is required and must be a non-empty string",
-      });
+    return res.status(400).json({
+      message: "Genre name is required and must be a non-empty string",
+    });
   }
   try {
     const user = await User.findById(req.user.id);

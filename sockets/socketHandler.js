@@ -53,7 +53,6 @@ module.exports = (io) => {
           console.warn(`Group not found: ${groupId}`);
           return socket.emit("groupError", "Group not found");
         }
-        // Optional but Recommended: Check if user is actually a member of the group
         if (
           !group.members.includes(socket.user.id.toString()) &&
           group.admin.toString() !== socket.user.id.toString() &&
@@ -260,9 +259,6 @@ module.exports = (io) => {
             message: `${socket.user.username} sent you a new message.`,
           });
         }
-        // Additionally, if the recipient is online and not in the chat room,
-        // you might want to send a notification to their personal room (socket.user.id.toString())
-        // Example: io.to(recipientId).emit('newPrivateMessageNotification', { from: savedMessage.sender, content: savedMessage.content });
       } catch (error) {
         console.error(
           `Error sending private message to ${recipientId}:`,
@@ -290,7 +286,7 @@ module.exports = (io) => {
           chatIdentifier,
         });
         console.log(
-          `⌨️ ${socket.user.username} is typing to ${recipientId} in ${chatIdentifier}`
+          ` ${socket.user.username} is typing to ${recipientId} in ${chatIdentifier}`
         );
       }
     });
@@ -335,9 +331,9 @@ module.exports = (io) => {
           readBy: socket.user.username,
         });
 
-        console.log(`👁️ Message ${messageId} read by ${socket.user.username}`);
+        console.log(` Message ${messageId} read by ${socket.user.username}`);
       } catch (error) {
-        console.error("❌ Error handling message read:", error);
+        console.error(" Error handling message read:", error);
       }
     });
     // Handle Disconnect

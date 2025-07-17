@@ -29,13 +29,9 @@ dotenv.config();
 // create an express app
 const app = express();
 const server = http.createServer(app);
-// effie:
-// const io= new Server (server,{
-//     cors:{origin:"*"}
-// })
+
 const { setIoInstance } = require("./utils/notificationService");
 
-// Gemini:
 const io = new Server(server, {
   cors: {
     origin: process.env.CLIENT_URL || "http://localhost:3000", // Adjust this to your frontend URL
@@ -47,8 +43,6 @@ setIoInstance(io);
 // Middleware
 app.use(express.json());
 app.use(cors());
-// gemini , effie didnt show:
-// app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
 
 // connect to MongoDB
 connectDB();
@@ -83,5 +77,4 @@ server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));
 //     const PORT = process.env.PORT || 5000;
 //     server.listen(PORT, ()=> console.log(`Server is running on port ${PORT}`));
 // }
-// At the end of app.js, add:
-module.exports = app; // Add this line for testing
+module.exports = app;

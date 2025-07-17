@@ -72,14 +72,6 @@ const groupSchema = new mongoose.Schema(
         },
       },
     ],
-    // Posts belonging to this group (though posts will also have a 'group' reference for easier querying)
-    // This is optional for direct reference, often populated from Post model queries
-    // posts: [
-    //     {
-    //         type: mongoose.Schema.Types.ObjectId,
-    //         ref: 'Post'
-    //     }
-    // ]
   },
   {
     timestamps: true, // Automatically adds createdAt and updatedAt fields

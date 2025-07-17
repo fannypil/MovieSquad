@@ -458,8 +458,6 @@ exports.getStatsSummary = async (req, res) => {
   }
 };
 
-// Add this new function to the existing statsController.js
-
 /**
  * Get comprehensive group statistics
  * Endpoint: GET /api/stats/group/:groupId
@@ -579,8 +577,7 @@ exports.getGroupStatistics = async (req, res) => {
     const totalPosts = await Post.countDocuments({ group: groupId });
 
     // Get watchlist items count (if you have a watchlist collection)
-    // For now, we'll set it to 0 or calculate from your watchlist logic
-    const watchlistItems = 0; // TODO: Replace with actual watchlist count
+    const watchlistItems = 0;
 
     // Calculate days active
     const daysActive = Math.ceil(

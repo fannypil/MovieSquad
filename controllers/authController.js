@@ -1,6 +1,6 @@
 const { validationResult } = require("express-validator");
-const bcrypt = require("bcryptjs"); // password hashing library
-const jwt = require("jsonwebtoken"); // JWT library for token generation
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
 // @desc    Register a new user
