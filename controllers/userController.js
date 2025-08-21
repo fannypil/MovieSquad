@@ -2,17 +2,6 @@ const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const { createNotification } = require("../utils/notificationService");
 const { isValidAvatar, getAvatarUrl } = require("../config/avatars");
-const {
-  findUserById,
-  handleServerError,
-  addItemToUserCollection,
-  removeItemFromUserCollection,
-  validateFriendRequest,
-  validateTMDBContent
-} = require('../utils/userHelpers');
-
-const watchlistController = require('./watchlistController');
-
 
 // Get current logged in user (profile) , /api/user/me
 exports.getMe = async (req, res) => {
@@ -105,7 +94,74 @@ exports.updateProfileSettings = async (req, res) => {
     await user.save();
     res.json(user.profileSettings);
   } catch (err) {
-    handleServerError(res, err, "Error updating profile settings");
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+};
+
+// -- ROUTES FOR MANAGING WATCHED CONTENT --
+
+// Add a watched content to the user's profile, /api/user/me/watched
+exports.addWatchedContent = async (req, res) => {
+  const { tmdbId, tmdbType, title, watchedDate, posterPath } = req.body;
+
+  if (!tmdbId || !tmdbType || !title) {
+    return res
+      .status(400)
+      .json({ message: "TMDB ID,Title and type are required" });
+  }
+  if (!["movie", "tv"].includes(tmdbType)) {
+    return res
+      .status(400)
+      .json({ message: 'tmdbType must be either "movie" or "tv".' });
+  }
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if the content is already in the watched list
+    const alreadyWatched = user.watchedContent.some(
+      (item) => item.tmdbId === parseInt(tmdbId) && item.tmdbType === tmdbType
+    );
+    if (alreadyWatched) {
+      return res
+        .status(400)
+        .json({ message: "Content already in watched list" });
+    }
+    user.watchedContent.unshift({
+      tmdbId: parseInt(tmdbId), // Convert to number
+      tmdbType: tmdbType,
+      title: title,
+      watchedDate: watchedDate || Date.now(),
+      posterPath: posterPath || null, // Optional field
+    });
+    await user.save();
+    res.json(user.watchedContent);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
+  }
+};
+
+//Remove a movie/TV show from user's watched list /api/user/me/watched/:tmdbId/:tmdbType
+exports.removeWatchedContent = async (req, res) => {
+  const { tmdbId, tmdbType } = req.params;
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    // Filter out the content to be removed
+    user.watchedContent = user.watchedContent.filter(
+      (item) => !(item.tmdbId == tmdbId && item.tmdbType === tmdbType)
+    );
+    await user.save();
+    res.json(user.watchedContent);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error");
   }
 };
 
