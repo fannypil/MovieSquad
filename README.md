@@ -91,14 +91,17 @@ MovieSquadBackend/
 │   └── avatars.js                  # vatar options & validation
 ├── controllers/
 │   ├── authController.js           # Authentication logic
+│   ├── adminController.js          # Admin logic
 │   ├── userController.js           # User profile logic
-│   ├── groupController.js          # Group management logic
+│   ├── groupController.js          # Group Basic CRUD operations
 │   ├── postController.js           # Posts logic
 │   ├── activityController.js       # Activity tracking (own profile/feed ..)
 │   ├── avatarController.js         # Avatar API
 │   ├── conversationController.js   # Chat logic
 │   ├── notificationController.js   # Notification logic
 │   ├── statsController.js          # Stats endpoints
+│   ├── membershipController.js     # Membership features
+│   ├── watchlistController.js      # Watchlist features
 │   └── tmdbController.js           # TMDB API integration
 ├── middleware/
 │   ├── authMiddleware.js     # JWT authentication middleware
@@ -124,6 +127,9 @@ MovieSquadBackend/
 ├── sockets/
 │   └── socketHandler.js         # Real-time socket logic
 ├── utils/
+│   ├── groupHelpers.js
+│   ├── postHelpers.js
+│   ├── userHelpers.js
 │   └── notificationService.js   # Notification helpers
 ├── tests/                       # # API tests
 │   ├── api.test.js
