@@ -2,86 +2,57 @@ const Post = require("../models/Post");
 const User = require("../models/User");
 const Group = require("../models/Group");
 const { createNotification } = require("../utils/notificationService");
+const {handleServerError,validateTMDBContent,verifyGroup,checkPostAccess,
+  checkCommentAccess,getPostById} = require("../utils/postHelpers")
 
-// Helper function for consistent error handling
-const handleServerError = (res, err, message = "Server error") => {
-  console.error(err.message);
-  if (err.kind === "ObjectId") {
-    return res.status(400).json({ message: "Invalid ID format" });
-  }
-  if (err.response && err.response.data) {
-    // For errors from external APIs like TMDB (though not directly used here)
-    return res.status(err.response.status).json(err.response.data);
-  }
-  res.status(500).json({ message: message });
-};
 
-// @desc    Create a new post
-// @route   POST /api/posts
-// @access  Private (authenticated users)
+// Create a new post
 exports.createPost = async (req, res) => {
-  const {
-    content,
-    groupId,
-    tmdbId,
-    tmdbType,
-    tmdbTitle,
-    tmdbPosterPath,
-    categories,
-  } = req.body;
+  const { content, groupId, tmdbId, tmdbType, tmdbTitle, tmdbPosterPath, categories } = req.body;
 
-  // --- Validation for REQUIRED fields from YOUR Post Schema ---
-  if (!content) {
-    return res.status(400).json({ msg: "Post content is required" });
-  }
-  if (!tmdbId || !tmdbType || !tmdbTitle) {
-    return res
-      .status(400)
-      .json({
-        msg: "Post must be associated with a movie or TV show (tmdbId, tmdbType, tmdbTitle are required)",
-      });
-  }
-  if (!["movie", "tv"].includes(tmdbType)) {
-    return res
-      .status(400)
-      .json({ msg: 'tmdbType must be either "movie" or "tv"' });
-  }
   try {
-    // If a groupId is provided, check if the group exists and if the user is a member/admin of it
-    // This is a common requirement for posting within a group.
-    let group = null;
+    // Validate required content
+    if (!content) {
+      return res.status(400).json({ message: "Post content is required" });
+    }
+    
+    // Validate TMDB content
+    const { valid, code, message } = validateTMDBContent(tmdbId, tmdbType, tmdbTitle);
+    if (!valid) {
+      return res.status(code).json({ message });
+    }
+    
+    // Verify group if provided
     if (groupId) {
-      group = await Group.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ message: "Group not found" });
+      const { valid, code, message } = await verifyGroup(groupId);
+      if (!valid) {
+        return res.status(code).json({ message });
       }
     }
+    
     const newPost = new Post({
-      author: req.user.id, // Assign the authenticated user as the author
-      group: groupId || undefined, // Set group if provided, otherwise leave undefined
-      content: content,
-      tmdbId: tmdbId,
-      tmdbType: tmdbType,
-      tmdbTitle: tmdbTitle,
-      tmdbPosterPath: tmdbPosterPath || null, // Use provided, or default to null
-      categories:
-        categories && Array.isArray(categories) && categories.length > 0
-          ? categories
-          : ["general"], // Use provided categories or default to ['general']
-      // Likes and comments start empty by default
+      author: req.user.id,
+      group: groupId || undefined,
+      content,
+      tmdbId,
+      tmdbType,
+      tmdbTitle,
+      tmdbPosterPath: tmdbPosterPath || null,
+      categories: categories && Array.isArray(categories) && categories.length > 0 
+        ? categories 
+        : ["general"],
     });
+    
     await newPost.save();
-
     res.status(201).json(newPost);
   } catch (err) {
     handleServerError(res, err, "Server error creating post");
   }
 };
-// @desc    Get all posts (optionally by group or user)
-// @route   GET /api/posts
-// @access  Public
+// Get all posts (optionally by group or user)
 exports.getPosts = async (req, res) => {
   const { authorId, groupId, search } = req.query;
+  
   try {
     let query = {};
     if (authorId) {
@@ -91,22 +62,21 @@ exports.getPosts = async (req, res) => {
       query.group = groupId;
     }
     if (search) {
-      // Use Mongoose's text search for content and tmdbTitle
       query.$text = { $search: search };
     }
+    
     const posts = await Post.find(query)
       .populate("author", "username email")
-      .populate("group", "name") // Populate group details
-      .sort({ createdAt: -1 }); // Sort by newest first
+      .populate("group", "name")
+      .sort({ createdAt: -1 });
+      
     res.json(posts);
   } catch (err) {
     handleServerError(res, err, "Server error fetching posts");
   }
 };
 
-// @desc    Get post by ID
-// @route   GET /api/posts/:id
-// @access  Public
+// Get post by ID
 exports.getPostById = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
@@ -122,9 +92,7 @@ exports.getPostById = async (req, res) => {
     handleServerError(res, err, "Server error fetching post by ID");
   }
 };
-// @desc    Update a post
-// @route   PUT /api/posts/:id
-// @access  Private (Post author or Global Admin)
+
 exports.updatePost = async (req, res) => {
   const {
     content,
@@ -135,49 +103,67 @@ exports.updatePost = async (req, res) => {
     categories,
     groupId,
   } = req.body;
+  
   const postId = req.params.id;
+  
   try {
-    let post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ message: "Post not found" });
+    // Use helper to get post by ID
+    const { found, post, code, message } = await getPostById(postId);
+    if (!found) {
+      return res.status(code).json({ message });
     }
-    // Check if the authenticated user is the post author or a global admin
-    if (post.author.toString() !== req.user.id && req.user.role !== "admin") {
-      return res
-        .status(403)
-        .json({
-          message: "Forbidden: You are not authorized to update this post",
-        });
+    
+    // Use helper to check authorization
+    const { authorized, code: authCode, message: authMessage } = 
+      await checkPostAccess(post, req.user.id, req.user.role);
+    if (!authorized) {
+      return res.status(authCode).json({ message: authMessage });
     }
-    // update post fields
+
+    // Update post fields
     if (content) post.content = content;
-    if (tmdbId) post.tmdbId = tmdbId;
-    if (tmdbType) {
-      if (!["movie", "tv"].includes(tmdbType)) {
-        return res
-          .status(400)
-          .json({ msg: 'tmdbType must be either "movie" or "tv"' });
+    
+    // Check TMDB content validity if updating any TMDB fields
+    if (tmdbId || tmdbType || tmdbTitle) {
+      const { valid, code, message } = validateTMDBContent(
+        tmdbId || post.tmdbId,
+        tmdbType || post.tmdbType,
+        tmdbTitle || post.tmdbTitle
+      );
+      
+      if (!valid) {
+        return res.status(code).json({ message });
       }
-      post.tmdbType = tmdbType;
+      
+      // Update TMDB fields only if validation passes
+      if (tmdbId) post.tmdbId = tmdbId;
+      if (tmdbType) post.tmdbType = tmdbType;
+      if (tmdbTitle) post.tmdbTitle = tmdbTitle;
     }
-    if (tmdbTitle) post.tmdbTitle = tmdbTitle;
-    if (tmdbPosterPath !== undefined) post.tmdbPosterPath = tmdbPosterPath; // Allow setting to null
+    
+    // Update other fields
+    if (tmdbPosterPath !== undefined) post.tmdbPosterPath = tmdbPosterPath;
+    
     if (categories && Array.isArray(categories)) {
-      // Optional: add validation for enum values for categories
       post.categories = categories;
     }
-    if (groupId) {
-      const group = await Group.findById(groupId);
-      if (!group) {
-        return res.status(404).json({ message: "Target group not found" });
+    
+    // Handle group changes
+    if (groupId !== undefined) {
+      if (groupId) {
+        // If groupId provided, verify it exists
+        const { valid, code, message } = await verifyGroup(groupId);
+        if (!valid) {
+          return res.status(code).json({ message });
+        }
+        post.group = groupId;
+      } else {
+        // If groupId is null, remove group association
+        post.group = undefined;
       }
-      post.group = groupId;
-    } else if (groupId === null) {
-      post.group = undefined;
     }
 
     await post.save();
-
     await post.populate("author", "username email _id");
 
     res.json(post);
@@ -186,38 +172,27 @@ exports.updatePost = async (req, res) => {
   }
 };
 
-// @desc    Delete a post
-// @route   DELETE /api/posts/:id
-// @access  Private (Post author, Group Admin of post's group, or Global Admin)
+// Delete a post
 exports.deletePost = async (req, res) => {
   const postId = req.params.id;
+  
   try {
-    let post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ message: "Post not found" });
+    // Use helper to get post by ID
+    const { found, post, code, message } = await getPostById(postId);
+    if (!found) {
+      return res.status(code).json({ message });
     }
-    // Check if the authenticated user is the post author, a group admin of the post's group, or a global admin
-    let isAuthorized = false;
-    if (post.author.toString() === req.user.id) {
-      isAuthorized = true; // User is the post author
-    } else if (req.user.role === "admin") {
-      isAuthorized = true; // Global admin
-    } else if (post.group && req.user.role === "groupAdmin") {
-      const group = await Group.findById(post.group);
-      if (group && group.admin.toString() === req.user.id) {
-        isAuthorized = true; // User is a group admin of the post's group
-      }
+    
+    // Use helper to check authorization
+    const { authorized, code: authCode, message: authMessage } = 
+      await checkPostAccess(post, req.user.id, req.user.role);
+    if (!authorized) {
+      return res.status(authCode).json({ message: authMessage });
     }
-    if (!isAuthorized) {
-      return res
-        .status(403)
-        .json({
-          message: "Forbidden: You are not authorized to delete this post",
-        });
-    }
+    
     // Delete the post
     await Post.deleteOne({ _id: postId });
-    res.json({ msg: "Post removed successfully" });
+    res.json({ message: "Post removed successfully" });
   } catch (err) {
     handleServerError(res, err, "Server error deleting post");
   }
@@ -227,29 +202,30 @@ exports.deletePost = async (req, res) => {
 // Like or Unlike a post ,  PUT /api/posts/:id/like
 exports.likePost = async (req, res) => {
   const postId = req.params.id;
-  const userId = req.user.id; // User ID from auth middleware
+  const userId = req.user.id;
 
   try {
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ message: "Post not found" });
+    // Use helper to get post by ID
+    const { found, post, code, message } = await getPostById(postId);
+    if (!found) {
+      return res.status(code).json({ message });
     }
-    // Check if the post has already been liked by this user
+    
+    // Check if already liked
     const hasLiked = post.likes.includes(userId);
 
     if (hasLiked) {
-      // If already liked, unlike it (pull user ID from likes array)
       post.likes.pull(userId);
       await post.save();
       return res.json({
-        msg: "Post unliked successfully",
+        message: "Post unliked successfully",
         likes: post.likes.length,
       });
     } else {
-      // If not liked, like it (push user ID to likes array)
       post.likes.push(userId);
       await post.save();
-      // CREATE NOTIFICATION: Notify post author if someone else liked their post
+      
+      // Notify post author
       if (post.author.toString() !== userId) {
         await createNotification(post.author, "like", {
           senderId: userId,
@@ -257,8 +233,9 @@ exports.likePost = async (req, res) => {
           entityType: "Post",
         });
       }
+      
       return res.json({
-        msg: "Post liked successfully",
+        message: "Post liked successfully",
         likes: post.likes.length,
       });
     }
@@ -270,25 +247,29 @@ exports.likePost = async (req, res) => {
 //Add a comment to a post ,  POST /api/posts/:id/comments
 exports.addComment = async (req, res) => {
   const postId = req.params.id;
-  const { text } = req.body; // Comment content
+  const { text } = req.body;
 
   if (!text || text.trim() === "") {
     return res.status(400).json({ message: "Comment text is required." });
   }
 
   try {
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ message: "Post not found." });
+    // Use helper to get post by ID
+    const { found, post, code, message } = await getPostById(postId);
+    if (!found) {
+      return res.status(code).json({ message });
     }
+    
     const newComment = {
-      user: req.user.id, // The authenticated user is the comment author
+      user: req.user.id,
       text: text.trim(),
-      createdAt: Date.now(), // Set creation timestamp
+      createdAt: Date.now(),
     };
-    post.comments.unshift(newComment); // Add new comment to the beginning of the array (most recent first)
+    
+    post.comments.unshift(newComment);
     await post.save();
-    // CREATE NOTIFICATION: Notify post author if someone else commented on their post
+    
+    // Notify post author
     if (post.author.toString() !== req.user.id) {
       await createNotification(post.author, "comment", {
         senderId: req.user.id,
@@ -297,15 +278,14 @@ exports.addComment = async (req, res) => {
       });
     }
 
-    // Populate the user field for the newly added comment before sending response
+    // Populate comment author
     const populatedPost = await Post.findById(postId).populate(
       "comments.user",
       "username email"
-    ); // Only populate comments.user
-    // Find the newly added comment in the populated post to return it
+    );
     const latestComment = populatedPost.comments[0];
 
-    res.status(201).json(latestComment); // Return the newly added comment
+    res.status(201).json(latestComment);
   } catch (err) {
     handleServerError(res, err, "Server error adding comment");
   }
@@ -314,15 +294,16 @@ exports.addComment = async (req, res) => {
 // Delete a comment from a post, DELETE /api/posts/:postId/comments/:commentId
 exports.deleteComment = async (req, res) => {
   const { postId, commentId } = req.params;
-  const userId = req.user.id; // Authenticated user attempting to delete
+  const userId = req.user.id;
 
   try {
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({ message: "Post not found." });
+    // Use helper to get post by ID
+    const { found, post, code, message } = await getPostById(postId);
+    if (!found) {
+      return res.status(code).json({ message });
     }
 
-    // Find the specific comment
+    // Find the comment
     const comment = post.comments.find(
       (comm) => comm._id.toString() === commentId
     );
@@ -330,41 +311,21 @@ exports.deleteComment = async (req, res) => {
     if (!comment) {
       return res.status(404).json({ message: "Comment not found." });
     }
-    // --- Authorization Check for deleting a comment ---
-    let isAuthorized = false;
-    // 1. Comment author
-    if (comment.user.toString() === userId) {
-      isAuthorized = true;
+    
+    // Check authorization using helper
+    const { authorized, code: authCode, message: authMessage } = 
+      await checkCommentAccess(post, comment, userId, req.user.role);
+    if (!authorized) {
+      return res.status(authCode).json({ message: authMessage });
     }
-    // 2. Post author
-    else if (post.author.toString() === userId) {
-      isAuthorized = true;
-    }
-    // 3. Global admin
-    else if (req.user.role === "admin") {
-      isAuthorized = true;
-    }
-    // 4. Group Admin of THIS post's group (if post has a group)
-    else if (post.group && req.user.role === "groupAdmin") {
-      const group = await Group.findById(post.group);
-      // IMPORTANT: Your Group schema has 'admin', not 'admins'. Corrected below.
-      if (group && group.admin.toString() === userId) {
-        isAuthorized = true;
-      }
-    }
-    if (!isAuthorized) {
-      return res
-        .status(403)
-        .json({
-          message: "Forbidden: You are not authorized to delete this comment.",
-        });
-    }
+    
     // Remove the comment
     post.comments = post.comments.filter(
       ({ _id }) => _id.toString() !== commentId
     );
+    
     await post.save();
-    res.json({ msg: "Comment removed successfully", comments: post.comments });
+    res.json({ message: "Comment removed successfully", comments: post.comments });
   } catch (err) {
     handleServerError(res, err, "Server error deleting comment");
   }
