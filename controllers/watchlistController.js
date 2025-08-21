@@ -1,6 +1,9 @@
 const Group = require("../models/Group");
+const User = require("../models/User");
 const {handleServerError,checkGroupAccess,createGroupNotification, 
     validateTMDBContent} = require("../utils/groupHelpers");
+const {addItemToUserCollection,removeItemFromUserCollectio
+  ,validateTMDBContent}= require("../utils/userHelpers");
 
 // Add a movie/TV show to a group's shared watchlist,  POST /api/groups/:id/watchlist
 exports.addToSharedWatchlist = async (req, res) => {
@@ -167,5 +170,59 @@ exports.getSharedWatchlist = async (req, res) => {
     res.json(group.sharedWatchlist);
   } catch (err) {
     handleServerError(res, err, "Server Error fetching shared watchlist");
+  }
+};
+
+// -- USER MANAGING WATCHED CONTENT --
+// Add a watched content to the user's profile, /api/user/me/watched
+exports.addWatchedContent = async (req, res) => {
+  const { tmdbId, tmdbType, title, watchedDate, posterPath } = req.body;
+  
+  // Validate TMDB input
+  const validation = validateTMDBContent(tmdbId, tmdbType, title);
+  if (!validation.valid) {
+    return res.status(validation.code).json({ message: validation.message });
+  }
+  
+  try {
+    // Add to user's watched content collection
+    const result = await addItemToUserCollection(
+      req.user.id,
+      'watchedContent',
+      {
+        tmdbId: parseInt(tmdbId),
+        tmdbType,
+        title,
+        watchedDate: watchedDate || Date.now(),
+        posterPath: posterPath || null
+      },
+      (item) => item.tmdbId === parseInt(tmdbId) && item.tmdbType === tmdbType
+    );
+    
+    if (!result.success) {
+      return res.status(result.code).json({ message: result.message });
+    }
+    
+    res.json(result.data);
+  } catch (err) {
+    handleServerError(res, err);
+  }
+};
+
+//Remove a movie/TV show from user's watched list /api/user/me/watched/:tmdbId/:tmdbType
+exports.removeWatchedContent = async (req, res) => {
+  const { tmdbId, tmdbType } = req.params;
+  try {
+    const result = await removeItemFromUserCollection(
+      req.user.id, 
+      'watchedContent',
+      (item) => !(item.tmdbId == tmdbId && item.tmdbType === tmdbType)
+    );
+    if (!result.success) {
+      return res.status(result.code).json({ message: result.message });
+    }
+    res.json(result.data);
+  } catch (err) {
+    handleServerError(res, err, "Error removing watched content");
   }
 };
