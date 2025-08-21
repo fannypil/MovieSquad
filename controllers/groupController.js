@@ -6,8 +6,9 @@ const {
   handleServerError,checkGroupAccess, addUserToGroup,removeUserFromGroup,
   createGroupNotification,validateTMDBContent,checkUserGroupStatus
 } = require("../utils/groupHelpers");
-const watchlistController = require('./group/watchlistController');
-const membershipController = require('./group/membershipController');
+// const watchlistController = require('../watchlistController');
+const watchlistController = require('./watchlistController');
+const membershipController = require('./membershipController');
 
 // Basic Group CRUD Operations
 

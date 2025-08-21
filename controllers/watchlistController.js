@@ -1,6 +1,6 @@
-const Group = require("../../models/Group");
+const Group = require("../models/Group");
 const {handleServerError,checkGroupAccess,createGroupNotification, 
-    validateTMDBContent} = require("../../utils/groupHelpers");
+    validateTMDBContent} = require("../utils/groupHelpers");
 
 // Add a movie/TV show to a group's shared watchlist,  POST /api/groups/:id/watchlist
 exports.addToSharedWatchlist = async (req, res) => {

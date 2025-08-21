@@ -1,8 +1,8 @@
-const Group = require("../../models/Group");
-const User = require("../../models/User");
-const Notification = require("../../models/Notification");
+const Group = require("../models/Group");
+const User = require("../models/User");
+const Notification = require("../models/Notification");
 const {handleServerError,checkGroupAccess,addUserToGroup,removeUserFromGroup,
-  createGroupNotification,checkUserGroupStatus} = require("../../utils/groupHelpers");
+  createGroupNotification,checkUserGroupStatus} = require("../utils/groupHelpers");
 
 exports.joinGroup = async (req, res) => {
   const groupId = req.params.id;
