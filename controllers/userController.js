@@ -2,18 +2,25 @@ const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const { createNotification } = require("../utils/notificationService");
 const { isValidAvatar, getAvatarUrl } = require("../config/avatars");
+const {
+  findUserById,
+  handleServerError,
+  addItemToUserCollection,
+  removeItemFromUserCollection,
+  validateFriendRequest,
+  validateTMDBContent
+} = require('../utils/userHelpers');
 
 // Get current logged in user (profile) , /api/user/me
 exports.getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("-password");
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    const { found, user, code, message } = await findUserById(req.user.id);
+    if (!found) {
+      return res.status(code).json({ message });
     }
     res.json(user);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error retrieving user profile");
   }
 };
 
@@ -67,18 +74,7 @@ exports.updateMe = async (req, res) => {
       message: "Profile updated successfully",
     });
   } catch (err) {
-    console.error(err.message);
-    // handle unique fields errors
-    if (err.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        msg: "User with this email or username already exists",
-      });
-    }
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
+    handleServerError(res, err, "Error updating profile");
   }
 };
 
@@ -87,9 +83,9 @@ exports.updateProfileSettings = async (req, res) => {
   try {
     const { isPublic, showWatchedContent, showFavorites } = req.body;
 
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    const { found, user, code, message } = await findUserById(req.user.id);
+    if (!found) {
+      return res.status(code).json({ message });
     }
 
     // Initialize profileSettings if it doesn't exist
@@ -106,8 +102,7 @@ exports.updateProfileSettings = async (req, res) => {
     await user.save();
     res.json(user.profileSettings);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error updating profile settings");
   }
 };
 
@@ -116,44 +111,35 @@ exports.updateProfileSettings = async (req, res) => {
 // Add a watched content to the user's profile, /api/user/me/watched
 exports.addWatchedContent = async (req, res) => {
   const { tmdbId, tmdbType, title, watchedDate, posterPath } = req.body;
-
-  if (!tmdbId || !tmdbType || !title) {
-    return res
-      .status(400)
-      .json({ message: "TMDB ID,Title and type are required" });
+  
+  // Validate TMDB input
+  const validation = validateTMDBContent(tmdbId, tmdbType, title);
+  if (!validation.valid) {
+    return res.status(validation.code).json({ message: validation.message });
   }
-  if (!["movie", "tv"].includes(tmdbType)) {
-    return res
-      .status(400)
-      .json({ message: 'tmdbType must be either "movie" or "tv".' });
-  }
+  
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Check if the content is already in the watched list
-    const alreadyWatched = user.watchedContent.some(
+    // Add to user's watched content collection
+    const result = await addItemToUserCollection(
+      req.user.id,
+      'watchedContent',
+      {
+        tmdbId: parseInt(tmdbId),
+        tmdbType,
+        title,
+        watchedDate: watchedDate || Date.now(),
+        posterPath: posterPath || null
+      },
       (item) => item.tmdbId === parseInt(tmdbId) && item.tmdbType === tmdbType
     );
-    if (alreadyWatched) {
-      return res
-        .status(400)
-        .json({ message: "Content already in watched list" });
+    
+    if (!result.success) {
+      return res.status(result.code).json({ message: result.message });
     }
-    user.watchedContent.unshift({
-      tmdbId: parseInt(tmdbId), // Convert to number
-      tmdbType: tmdbType,
-      title: title,
-      watchedDate: watchedDate || Date.now(),
-      posterPath: posterPath || null, // Optional field
-    });
-    await user.save();
-    res.json(user.watchedContent);
+    
+    res.json(result.data);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err);
   }
 };
 
@@ -161,94 +147,67 @@ exports.addWatchedContent = async (req, res) => {
 exports.removeWatchedContent = async (req, res) => {
   const { tmdbId, tmdbType } = req.params;
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    // Filter out the content to be removed
-    user.watchedContent = user.watchedContent.filter(
+    const result = await removeItemFromUserCollection(
+      req.user.id, 
+      'watchedContent',
       (item) => !(item.tmdbId == tmdbId && item.tmdbType === tmdbType)
     );
-    await user.save();
-    res.json(user.watchedContent);
+    if (!result.success) {
+      return res.status(result.code).json({ message: result.message });
+    }
+    res.json(result.data);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error removing watched content");
   }
 };
 // -- ROUTES FOR MANAGING MOVIE GENRES --
 exports.addFavoriteMovie = async (req, res) => {
   const { tmdbId, title, tmdbType, posterPath } = req.body;
 
-  if (!tmdbId || !title || !tmdbType) {
-    return res.status(400).json({
-      message: "TMDB ID, title, and type are required for a favorite movie.",
-    });
-  }
-  if (!["movie", "tv"].includes(tmdbType)) {
-    return res.status(400).json({
-      message: 'tmdbType must be either "movie" or "tv".',
-    });
+  // Use validateTMDBContent
+  const validation = validateTMDBContent(tmdbId, tmdbType, title);
+  if (!validation.valid) {
+    return res.status(validation.code).json({ message: validation.message });
   }
 
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const alreadyFavorited = user.favoriteMovies.some(
+    const result = await addItemToUserCollection(
+      req.user.id,
+      'favoriteMovies',
+      {
+        tmdbId: parseInt(tmdbId),
+        title,
+        tmdbType,
+        posterPath: posterPath || ""
+      },
       (item) => item.tmdbId === parseInt(tmdbId)
     );
-
-    if (alreadyFavorited) {
-      return res
-        .status(400)
-        .json({ message: "Movie already in favorite list." });
+    
+    if (!result.success) {
+      return res.status(result.code).json({ message: result.message });
     }
-    const newFavorite = {
-      tmdbId: parseInt(tmdbId),
-      title: title,
-      tmdbType: tmdbType,
-      posterPath: posterPath || "",
-    };
-
-    user.favoriteMovies.unshift(newFavorite);
-
-    await user.save();
-    res.json(user.favoriteMovies);
+    
+    res.json(result.data);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error adding favorite movie");
   }
 };
 
 // Remove a movie from user's favorite movies list
 exports.removeFavoriteMovie = async (req, res) => {
   const { tmdbId } = req.params;
-
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const initialLength = user.favoriteMovies.length;
-    user.favoriteMovies = user.favoriteMovies.filter(
+    const result = await removeItemFromUserCollection(
+      req.user.id,
+      'favoriteMovies',
       (item) => item.tmdbId !== parseInt(tmdbId)
     );
-
-    if (user.favoriteMovies.length === initialLength) {
-      return res
-        .status(404)
-        .json({ message: "Movie not found in favorite list." });
+    if (!result.success) {
+      return res.status(result.code).json({ message: result.message });
     }
-
-    await user.save();
-    res.json(user.favoriteMovies);
+    res.json(result.data);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error removing favorite movie");
   }
 };
 
@@ -308,25 +267,22 @@ exports.removeFavoriteGenre = async (req, res) => {
 
 // Send a friend request, POST /api/user/friends/request
 exports.sendFriendRequest = async (req, res) => {
-  const { recipientId } = req.body; // The user to send request to
-  const senderId = req.user.id; // Current authenticated user
+  const { recipientId } = req.body;
+  const senderId = req.user.id;
 
-  if (!recipientId) {
-    return res.status(400).json({ message: "Recipient ID is required" });
-  }
-
-  if (recipientId === senderId) {
-    return res
-      .status(400)
-      .json({ message: "You cannot send a friend request to yourself" });
+  // Validate request
+  const validation = validateFriendRequest(senderId, recipientId);
+  if (!validation.valid) {
+    return res.status(validation.code).json({ message: validation.message });
   }
 
   try {
-    const sender = await User.findById(senderId);
-    const recipient = await User.findById(recipientId);
-
-    if (!recipient) {
-      return res.status(404).json({ message: "User not found" });
+    const { found: senderFound, user: sender } = await findUserById(senderId);
+    const { found: recipientFound, user: recipient, code, message } = 
+      await findUserById(recipientId);
+    
+    if (!recipientFound) {
+      return res.status(code).json({ message });
     }
 
     // Check if they are already friends
@@ -349,17 +305,16 @@ exports.sendFriendRequest = async (req, res) => {
     recipient.friendRequests.push(senderId);
     await recipient.save();
 
-    // CREATE NOTIFICATION: Notify recipient of friend request
+    // CREATE NOTIFICATION
     await createNotification(recipientId, "friend_request", {
-      senderId: senderId,
+      senderId,
       entityId: senderId,
       entityType: "User",
     });
 
     res.json({ message: "Friend request sent successfully" });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error sending friend request");
   }
 };
 
@@ -373,21 +328,16 @@ exports.acceptFriendRequest = async (req, res) => {
   }
 
   try {
-    const recipient = await User.findById(recipientId);
-    const sender = await User.findById(senderId);
-
-    if (!sender) {
-      return res.status(404).json({ message: "User not found" });
+    const { found: recipientFound, user: recipient } = await findUserById(recipientId);
+    const { found: senderFound, user: sender, code, message } = await findUserById(senderId);
+    
+    if (!senderFound) {
+      return res.status(code).json({ message });
     }
 
     // Check if friend request exists
-    if (
-      !recipient.friendRequests ||
-      !recipient.friendRequests.includes(senderId)
-    ) {
-      return res
-        .status(400)
-        .json({ message: "No friend request found from this user" });
+    if (!recipient.friendRequests || !recipient.friendRequests.includes(senderId)) {
+      return res.status(400).json({ message: "No friend request found from this user" });
     }
 
     // Remove from friend requests
@@ -412,8 +362,7 @@ exports.acceptFriendRequest = async (req, res) => {
 
     res.json({ message: "Friend request accepted successfully" });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error accepting friend request");
   }
 };
 
@@ -427,15 +376,13 @@ exports.rejectFriendRequest = async (req, res) => {
   }
 
   try {
-    const recipient = await User.findById(recipientId);
+    const { found, user: recipient, code, message } = await findUserById(recipientId);
+    if (!found) {
+      return res.status(code).json({ message });
+    }
 
-    if (
-      !recipient.friendRequests ||
-      !recipient.friendRequests.includes(senderId)
-    ) {
-      return res
-        .status(400)
-        .json({ message: "No friend request found from this user" });
+    if (!recipient.friendRequests || !recipient.friendRequests.includes(senderId)) {
+      return res.status(400).json({ message: "No friend request found from this user" });
     }
 
     // Remove from friend requests
@@ -444,35 +391,31 @@ exports.rejectFriendRequest = async (req, res) => {
 
     res.json({ message: "Friend request rejected successfully" });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error rejecting friend request");
   }
 };
+
 // Add a user to current user's friends list
 exports.addFriend = async (req, res) => {
   const { friendId } = req.params;
+  const currentUserId = req.user.id;
 
-  if (req.user.id === friendId) {
-    return res
-      .status(400)
-      .json({ message: "Cannot add yourself as a friend." });
+  // Validate request
+  const validation = validateFriendRequest(currentUserId, friendId);
+  if (!validation.valid) {
+    return res.status(validation.code).json({ message: validation.message });
   }
 
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "Current user not found." });
-    }
-
-    const friend = await User.findById(friendId);
-    if (!friend) {
-      return res.status(404).json({ message: "Friend user not found." });
+    const { found: userFound, user } = await findUserById(currentUserId);
+    const { found: friendFound, user: friend, code, message } = await findUserById(friendId);
+    
+    if (!friendFound) {
+      return res.status(code).json({ message });
     }
 
     if (user.friends.includes(friendId)) {
-      return res
-        .status(400)
-        .json({ message: "Already friends with this user." });
+      return res.status(400).json({ message: "Already friends with this user." });
     }
 
     user.friends.push(friendId);
@@ -480,8 +423,7 @@ exports.addFriend = async (req, res) => {
 
     res.json(user.friends);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error adding friend");
   }
 };
 
@@ -491,27 +433,22 @@ exports.removeFriend = async (req, res) => {
   const currentUserId = req.user.id;
 
   try {
-    const user = await User.findById(currentUserId);
-    const friend = await User.findById(friendId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found." });
-    }
-    if (!friend) {
-      return res.status(404).json({ message: "Friend not found." });
+    const { found: userFound, user } = await findUserById(currentUserId);
+    const { found: friendFound, user: friend, code, message } = await findUserById(friendId);
+    
+    if (!friendFound) {
+      return res.status(code).json({ message });
     }
 
     // Check if friendId is in user's friends list
     if (!user.friends.includes(friendId)) {
-      return res
-        .status(404)
-        .json({ message: "This user is not in your friends list." });
+      return res.status(404).json({ message: "This user is not in your friends list." });
     }
+    
     // Remove friendId from user's friends list
     user.friends = user.friends.filter((id) => id.toString() !== friendId);
     // Remove currentUserId from friend's friends list
-    friend.friends = friend.friends.filter(
-      (id) => id.toString() !== currentUserId
-    );
+    friend.friends = friend.friends.filter((id) => id.toString() !== currentUserId);
 
     await user.save();
     await friend.save();
@@ -521,48 +458,54 @@ exports.removeFriend = async (req, res) => {
       remainingFriends: user.friends,
     });
   } catch (err) {
-    console.error("Error removing friend:", err);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error removing friend");
   }
 };
 
 // Get user's friends list, GET /api/user/me/friends
 exports.getMyFriends = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id)
+     const { found, user, code, message } = await findUserById(req.user.id);
+    if (!found) {
+      return res.status(code).json({ message });
+    }
+
+     const populatedUser = await User.findById(req.user.id)
       .populate("friends", "username profilePicture bio")
       .select("friends");
 
-    res.json(user.friends);
+    res.json(populatedUser.friends);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error fetching friends list");
   }
 };
 // Get pending friend requests,  GET /api/user/me/friend-requests
 exports.getPendingFriendRequests = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id)
+     const user = await User.findById(req.user.id)
       .populate("friendRequests", "username profilePicture bio")
       .select("friendRequests");
 
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
     res.json(user.friendRequests);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error fetching pending friend requests");
   }
 };
 
-// Search users by username,GET /api/user/search?q=username
+// Search users by username, GET /api/user/search?q=username
 exports.searchUsers = async (req, res) => {
   try {
     const { q } = req.query;
     const currentUserId = req.user.id;
 
     if (!q || q.trim().length < 2) {
-      return res
-        .status(400)
-        .json({ message: "Search query must be at least 2 characters long" });
+      return res.status(400).json({ 
+        message: "Search query must be at least 2 characters long" 
+      });
     }
 
     const users = await User.find({
@@ -574,8 +517,7 @@ exports.searchUsers = async (req, res) => {
 
     res.json(users);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error searching for users");
   }
 };
 
@@ -586,7 +528,7 @@ exports.getUserProfile = async (req, res) => {
     const currentUserId = req.user.id;
 
     const user = await User.findById(userId)
-      .select("-password -email") // Don't expose sensitive info
+      .select("-password -email") 
       .populate("friends", "username profilePicture");
 
     if (!user) {
@@ -609,7 +551,6 @@ exports.getUserProfile = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+    handleServerError(res, err, "Error fetching user profile");
   }
 };
