@@ -2,6 +2,7 @@ const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const { createNotification } = require("../utils/notificationService");
 const { isValidAvatar, getAvatarUrl } = require("../config/avatars");
+const watchlistController = require('./watchlistController');
 
 // Get current logged in user (profile) , /api/user/me
 exports.getMe = async (req, res) => {
