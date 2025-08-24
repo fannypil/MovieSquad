@@ -1,7 +1,7 @@
 const Group = require("../models/Group");
 const User = require("../models/User");
 const {handleServerError,checkGroupAccess,createGroupNotification, 
-    validateTMDBContent} = require("../utils/groupHelpers");
+    validateTMDBContent,checkUserGroupStatus} = require("../utils/groupHelpers");
 const {addItemToUserCollection,removeItemFromUserCollectio}= require("../utils/userHelpers");
 
 // Add a movie/TV show to a group's shared watchlist,  POST /api/groups/:id/watchlist
